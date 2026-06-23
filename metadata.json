@@ -1,0 +1,6 @@
+{
+  "name": "Sky Inventory Pro",
+  "description": "An inventory management system for Sky Automation Tech to manage products, stock levels, sales, invoicing, and suppliers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

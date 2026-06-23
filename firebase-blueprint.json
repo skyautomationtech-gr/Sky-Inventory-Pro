@@ -1,0 +1,133 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Inventory product details including SKU, categories, prices and stock counts.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the product" },
+        "name": { "type": "string", "description": "Display name of the product" },
+        "sku": { "type": "string", "description": "Unique Stock Keeping Unit code" },
+        "category": { "type": "string", "description": "Product category grouping" },
+        "brand": { "type": "string", "description": "Manufacturer or brand of the product" },
+        "purchasePrice": { "type": "number", "description": "Unit purchase price paid to suppliers" },
+        "sellingPrice": { "type": "number", "description": "Unit selling price billed to customers" },
+        "stockQuantity": { "type": "number", "description": "Current on-hand warehouse count" },
+        "lowStockLimit": { "type": "number", "description": "Safety threshold triggers low stock alerts" },
+        "imageUrl": { "type": "string", "description": "URL link to the product asset image" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Record creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last modified timestamp" }
+      },
+      "required": ["id", "name", "sku", "category", "purchasePrice", "sellingPrice", "stockQuantity", "lowStockLimit", "createdAt", "updatedAt"]
+    },
+    "InventoryLog": {
+      "title": "InventoryLog",
+      "description": "Audit trail record tracking warehouse stock-in and stock-out adjustments.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique event id for the log" },
+        "productId": { "type": "string", "description": "Reference to the modified product" },
+        "productName": { "type": "string", "description": "Cached product name for reporting" },
+        "type": { "type": "string", "enum": ["stockIn", "stockOut"], "description": "Adjustment direction" },
+        "quantity": { "type": "number", "description": "Quantity moved" },
+        "previousStock": { "type": "number", "description": "Product stock before change" },
+        "newStock": { "type": "number", "description": "Product stock after change" },
+        "note": { "type": "string", "description": "Operator explanation/notes" },
+        "createdBy": { "type": "string", "description": "Name of the operating staff or user id" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Event timestamp" }
+      },
+      "required": ["id", "productId", "productName", "type", "quantity", "previousStock", "newStock", "createdBy", "createdAt"]
+    },
+    "Sale": {
+      "title": "Sale",
+      "description": "Customer order sales logs that captures invoiced items and profits.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique sales record id" },
+        "invoiceNo": { "type": "string", "description": "Incremental Invoice Number" },
+        "customerName": { "type": "string", "description": "Purchasing customer identifier" },
+        "customerPhone": { "type": "string", "description": "Customer contact number" },
+        "items": { "type": "array", "description": "Array of sold product items with quantities" },
+        "subtotal": { "type": "number", "description": "Items total selling value before discounts" },
+        "discount": { "type": "number", "description": "Total discount value in USD/Local currency" },
+        "totalAmount": { "type": "number", "description": "Final billed net amount" },
+        "profit": { "type": "number", "description": "Net yield margin profit calculation" },
+        "paymentMethod": { "type": "string", "description": "Method of payment used" },
+        "paymentStatus": { "type": "string", "description": "Current payment state" },
+        "createdBy": { "type": "string", "description": "Name of operating staff" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Sales timestamp" }
+      },
+      "required": ["id", "invoiceNo", "customerName", "items", "subtotal", "discount", "totalAmount", "profit", "paymentMethod", "paymentStatus", "createdBy", "createdAt"]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Receipt invoice ledger copy aligned directly with sales records.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique invoice ledger document id" },
+        "invoiceNo": { "type": "string", "description": "Formatted invoice number reference" },
+        "saleId": { "type": "string", "description": "Reference sale document id" },
+        "customerName": { "type": "string", "description": "Printed customer name" },
+        "customerPhone": { "type": "string", "description": "Printed customer phone" },
+        "items": { "type": "array", "description": "JSON representation of sale lines" },
+        "totalAmount": { "type": "number", "description": "Sum amount paid" },
+        "paymentMethod": { "type": "string", "description": "Settled payment type" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Invoicing date" }
+      },
+      "required": ["id", "invoiceNo", "saleId", "customerName", "items", "totalAmount", "paymentMethod", "createdAt"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "External product provider with current purchase account records.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique registration code" },
+        "name": { "type": "string", "description": "Company or personal merchant name" },
+        "phone": { "type": "string", "description": "Contact number" },
+        "address": { "type": "string", "description": "Location address details" },
+        "productSupplied": { "type": "string", "description": "Core products categories handled" },
+        "totalPaid": { "type": "number", "description": "Cumulative historical payments made" },
+        "dueAmount": { "type": "number", "description": "Current balance outstanding" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Registration audit timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Update audit timestamp" }
+      },
+      "required": ["id", "name", "phone", "address", "productSupplied", "totalPaid", "dueAmount", "createdAt", "updatedAt"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Corporate profiles allowed access control inside Sky Automation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Corporate profile unique id" },
+        "name": { "type": "string", "description": "Full name of operator" },
+        "email": { "type": "string", "description": "Corporate email address" },
+        "role": { "type": "string", "enum": ["superAdmin", "admin", "staff"], "description": "Access profile setting" },
+        "status": { "type": "string", "enum": ["active", "blocked"], "description": "Current access state" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Join timestamp" }
+      },
+      "required": ["id", "name", "email", "role", "status", "createdAt"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Product categories containing subcategories and styling icons.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier for the category" },
+        "name": { "type": "string", "description": "The general name of the category" },
+        "icon": { "type": "string", "description": "Name of the lucide icon to display" },
+        "subcategories": { "type": "array", "description": "List of subcategories" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Category creation time" }
+      },
+      "required": ["id", "name", "icon", "subcategories", "createdAt"]
+    }
+  },
+  "firestore": {
+    "products": { "schema": "Product", "description": "Main product items collection" },
+    "inventoryLogs": { "schema": "InventoryLog", "description": "Inventory stock log collection" },
+    "sales": { "schema": "Sale", "description": "Sales ledger logs" },
+    "invoices": { "schema": "Invoice", "description": "Invoice documents records" },
+    "suppliers": { "schema": "Supplier", "description": "Supplier database records" },
+    "users": { "schema": "User", "description": "Authorized staff and admin users" },
+    "categories": { "schema": "Category", "description": "Product category configuration" }
+  }
+}

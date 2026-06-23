@@ -1,0 +1,89 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Poppins", "Manrope", sans-serif;
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #f8fafc;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Force standard colors during print/PDF export dynamically or inside print media */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+  
+  /* Hide all non-printable elements */
+  #topbar, 
+  #sidebar, 
+  aside, 
+  header, 
+  nav, 
+  button, 
+  #user-profile-button, 
+  #sidebar-collapse-trigger, 
+  #mobile-sidebar-toggle, 
+  .no-print {
+    display: none !important;
+  }
+  
+  /* Reset background and layout for clean print */
+  body {
+    background-color: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  #root, main {
+    background: transparent !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Make modal container unconstrained and clear backdrop color */
+  .fixed.inset-0.bg-neutral-900\/60 {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  #invoice-display-modal {
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Force the A4 sheet to take exact A4 page dimensions on print output */
+  #printable-invoice-body {
+    width: 210mm !important;
+    height: 297mm !important;
+    min-height: 297mm !important;
+    max-height: 297mm !important;
+    padding: 10mm 14mm !important;
+    margin: 0 !important;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background-color: #ffffff !important;
+    color: #1e293b !important;
+  }
+
+  .print-avoid-break {
+    break-inside: avoid;
+  }
+}

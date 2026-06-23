@@ -1,0 +1,223 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Universal default lock-down gate
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Core Authentication and Role Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superAdmin';
+    }
+
+    function isAdmin() {
+      return isSignedIn() && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'superAdmin' ||
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+
+    // 3. Schema & Type Validation Primitives
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\+\\.\\@]+$');
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.size() <= 256;
+    }
+
+    function isValidProduct(p) {
+      return p.id is string && p.id.size() <= 128 &&
+             p.name is string && p.name.size() <= 256 &&
+             p.sku is string && p.sku.size() <= 64 &&
+             p.category is string && p.category.size() <= 128 &&
+             p.brand is string && p.brand.size() <= 256 &&
+             p.purchasePrice is number && p.purchasePrice >= 0 &&
+             p.sellingPrice is number && p.sellingPrice >= 0 &&
+             p.stockQuantity is number && p.stockQuantity >= 0 &&
+             p.lowStockLimit is number && p.lowStockLimit >= 0;
+    }
+
+    function isValidInventoryLog(log) {
+      return log.id is string && log.id.size() <= 128 &&
+             log.productId is string && log.productId.size() <= 128 &&
+             log.productName is string && log.productName.size() <= 256 &&
+             log.type is string && (log.type == 'Stock In' || log.type == 'Stock Out' || log.type == 'stockIn' || log.type == 'stockOut') &&
+             log.quantity is number && log.quantity >= 0 &&
+             log.previousStock is number &&
+             log.newStock is number &&
+             log.createdBy is string && log.createdBy.size() <= 256;
+    }
+
+    function isValidSale(s) {
+      return s.id is string && s.id.size() <= 128 &&
+             s.invoiceNo is string && s.invoiceNo.size() <= 64 &&
+             s.customerName is string && s.customerName.size() <= 256 &&
+             s.items is list &&
+             s.subtotal is number && s.subtotal >= 0 &&
+             s.discount is number && s.discount >= 0 &&
+             s.totalAmount is number && s.totalAmount >= 0 &&
+             s.profit is number &&
+             s.paymentMethod is string && s.paymentMethod.size() <= 64 &&
+             s.paymentStatus is string && s.paymentStatus.size() <= 64 &&
+             s.createdBy is string && s.createdBy.size() <= 256;
+    }
+
+    function isValidInvoice(inv) {
+      return inv.id is string && inv.id.size() <= 128 &&
+             inv.invoiceNo is string && inv.invoiceNo.size() <= 64 &&
+             inv.saleId is string && inv.saleId.size() <= 128 &&
+             inv.customerName is string && inv.customerName.size() <= 256 &&
+             inv.items is list &&
+             inv.totalAmount is number && inv.totalAmount >= 0 &&
+             inv.paymentMethod is string && inv.paymentMethod.size() <= 64;
+    }
+
+    function isValidSupplier(s) {
+      return s.id is string && s.id.size() <= 128 &&
+             s.name is string && s.name.size() <= 256 &&
+             s.phone is string && s.phone.size() <= 64 &&
+             s.address is string && s.address.size() <= 512 &&
+             s.productSupplied is string && s.productSupplied.size() <= 512 &&
+             s.totalPaid is number && s.totalPaid >= 0 &&
+             s.dueAmount is number;
+    }
+
+    function isValidUser(u) {
+      return u.id is string && u.id.size() <= 128 &&
+             u.name is string && u.name.size() <= 256 &&
+             u.email is string && u.email.size() <= 256 &&
+             u.role is string && (u.role == 'superAdmin' || u.role == 'admin' || u.role == 'staff') &&
+             u.status is string && (u.status == 'active' || u.status == 'blocked' || u.status == 'inactive');
+    }
+
+    function isValidCategory(cat) {
+      return cat.id is string && cat.id.size() <= 128 &&
+             cat.name is string && cat.name.size() <= 128 &&
+             cat.icon is string && cat.icon.size() <= 128 &&
+             cat.subcategories is list;
+    }
+
+    function isValidOtp(o) {
+      return o.otp is string && o.otp.size() == 6 &&
+             o.email is string && o.email.size() <= 256 &&
+             o.attempts is number && o.attempts >= 0 && o.attempts <= 5 &&
+             o.verified is bool &&
+             o.type is string && (o.type == 'registration' || o.type == 'reset');
+    }
+
+    // 4. Pattern-Guarded Collection Rules
+    
+    match /products/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(id) && isValidProduct(incoming()) && (id == incoming().id);
+      allow update: if isSignedIn() && isValidId(id) && isValidProduct(incoming()) && (id == incoming().id);
+      allow delete: if isAdmin();
+    }
+
+    match /inventoryLogs/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(id) && isValidInventoryLog(incoming()) && (id == incoming().id);
+      allow update: if isAdmin() && isValidId(id) && isValidInventoryLog(incoming()) && (id == incoming().id);
+      allow delete: if isSuperAdmin();
+    }
+
+    match /sales/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(id) && isValidSale(incoming()) && (id == incoming().id);
+      allow update: if isAdmin() && isValidId(id) && isValidSale(incoming()) && (id == incoming().id);
+      allow delete: if isSuperAdmin();
+    }
+
+    match /invoices/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(id) && isValidInvoice(incoming()) && (id == incoming().id);
+      allow update: if isAdmin() && isValidId(id) && isValidInvoice(incoming()) && (id == incoming().id);
+      allow delete: if isSuperAdmin();
+    }
+
+    match /suppliers/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(id) && isValidSupplier(incoming()) && (id == incoming().id);
+      allow update: if isSignedIn() && isValidId(id) && isValidSupplier(incoming()) && (id == incoming().id);
+      allow delete: if isAdmin();
+    }
+
+    match /users/{id} {
+      // Direct reading is allowed for profile lookup / login
+      allow read: if isSignedIn();
+      
+      // Account registration can be triggered for self-profile, or by a SuperAdmin
+      allow create: if isSignedIn() && isValidUser(incoming()) && (id == incoming().id) && (
+        id == request.auth.uid || isSuperAdmin()
+      );
+      
+      // Prevent standard users from modifying their own 'role' or 'status' to bypass access restrictions
+      allow update: if isSignedIn() && isValidUser(incoming()) && (id == incoming().id) && (
+        isSuperAdmin() || (
+          id == request.auth.uid &&
+          incoming().role == existing().role &&
+          incoming().status == existing().status
+        )
+      );
+      
+      allow delete: if isSuperAdmin();
+    }
+
+    match /categories/{id} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(id) && isValidCategory(incoming()) && (id == incoming().id);
+      allow update: if isSignedIn() && isValidId(id) && isValidCategory(incoming()) && (id == incoming().id);
+      allow delete: if isAdmin();
+    }
+
+    match /warranties/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(id);
+    }
+
+    match /loyalty_customers/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(id);
+    }
+
+    match /loyalty_transactions/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && isValidId(id);
+    }
+
+    // OTP Document Security matches
+    match /otps/{id} {
+      // Direct get is allowed (used by the verification process and sandboxed UI inbox check)
+      allow get: if true;
+      // List queries are strictly forbidden to prevent dumping OTP tokens
+      allow list: if false;
+
+      // Creation is allowed if document ID matches the email and content conforms to the secure OTP schema
+      allow create: if (id == incoming().email) && isValidOtp(incoming());
+
+      // Only allow updating attempts and code verification flags to prevent raw OTP alteration/tampering
+      allow update: if (id == incoming().email) && isValidOtp(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['attempts', 'verified'])
+      );
+
+      // OTP documents are automatically deleted upon successful verification code matches
+      allow delete: if true;
+    }
+  }
+}
