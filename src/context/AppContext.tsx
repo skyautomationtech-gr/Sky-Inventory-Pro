@@ -1556,7 +1556,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       login,
       registerUser,
       logout,
-      resetPassword
+      resetPassword,
+      sendRegisterOTP,
+      sendResetOTP,
+      verifyOTP,
+      completeOTPRegistration,
+      completeOTPPasswordReset
     }}>
       {children}
     </AppContext.Provider>
