@@ -1214,51 +1214,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const login = async (email: string, password: string, rememberMe: boolean) => {
     const normalizedEmail = email.trim().toLowerCase();
     
-    // First, check if there is a local user doc with a passwordOverride in Firestore
-    const q = query(collection(db, 'users'), where('email', '==', normalizedEmail));
-    const userSnap = await getDocs(q);
-    
-    let isBypassed = false;
-    let fallbackUserDoc: any = null;
-    
-    if (!userSnap.empty) {
-      const uDoc = userSnap.docs[0].data();
-      if (uDoc.status === 'inactive') {
-        throw new Error('Your enterprise account is inactive. Please complete your registration via OTP verification.');
-      }
-      if (uDoc.passwordOverride && uDoc.passwordOverride === password) {
-        isBypassed = true;
-        fallbackUserDoc = uDoc;
-      }
-    }
-
-    if (isBypassed && fallbackUserDoc) {
-      // Authenticate via local high-fidelity Firestore override password (e.g. after a custom OTP reset)
-      const mappedRole: UserRole = fallbackUserDoc.role === 'superAdmin' ? 'Super Admin' : fallbackUserDoc.role === 'admin' ? 'Admin' : 'Staff';
-      const matchedUser = {
-        name: fallbackUserDoc.name || 'Enterprise Operator',
-        email: normalizedEmail,
-        role: mappedRole,
-        avatar: fallbackUserDoc.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(fallbackUserDoc.name || 'Operator')}`
-      };
-      
-      setCurrentUser(matchedUser);
-      setAuthenticatedRole(matchedUser.role);
-      setIsAuthenticated(true);
-      
-      if (rememberMe) {
-        localStorage.setItem('sky_v2_session_active', 'true');
-        localStorage.setItem('sky_v2_user', JSON.stringify(matchedUser));
-        localStorage.setItem('sky_v2_auth_role', matchedUser.role);
-      } else {
-        localStorage.setItem('sky_v2_session_active', 'true');
-        localStorage.setItem('sky_v2_user', JSON.stringify(matchedUser));
-        localStorage.setItem('sky_v2_auth_role', matchedUser.role);
-      }
-      return;
-    }
-
-    // Default to standard Firebase Auth Signin
+    // Default to standard Firebase Auth Signin FIRST - avoids any unauthenticated reads from Firestore 'users' collection
     const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
     const authUser = userCredential.user;
     
@@ -1318,17 +1274,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const sendRegisterOTP = async (name: string, email: string, password: string, businessName: string): Promise<string> => {
     const normalizedEmail = email.trim().toLowerCase();
     
-    // Check if user already exists
-    const q = query(collection(db, 'users'), where('email', '==', normalizedEmail));
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      throw new Error('An enterprise account with this email address already exists.');
+    // 1. Create the user in Firebase Auth immediately. Let Firebase naturally handle duplicate detection and security policies.
+    let userCredential;
+    try {
+      userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
+    } catch (err: any) {
+      if (err.code === 'auth/email-already-in-use') {
+        throw new Error('An enterprise account with this email address already exists.');
+      }
+      throw err;
     }
     
-    // Generate valid 6-digit random code
+    const user = userCredential.user;
+    
+    // 2. Generate valid 6-digit random code
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
     
-    // Store in collection 'otps'
+    // 3. Store in collection 'otps' - Since user is signed in, request.auth is active and can perform secure writes conforming to schema
     await setDoc(doc(db, 'otps', normalizedEmail), {
       otp: otpCode,
       email: normalizedEmail,
@@ -1338,9 +1300,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       verified: false,
       type: 'registration',
       tempUserData: {
+        uid: user.uid,
         name,
         email: normalizedEmail,
-        password,
         businessName
       }
     });
@@ -1352,30 +1314,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const sendResetOTP = async (email: string): Promise<string> => {
     const normalizedEmail = email.trim().toLowerCase();
-    
-    // Ensure email exists in system directory
-    const q = query(collection(db, 'users'), where('email', '==', normalizedEmail));
-    const snap = await getDocs(q);
-    if (snap.empty) {
-      throw new Error('This email address does not match any registered enterprise profile.');
-    }
-    
-    // Generate valid 6-digit random code
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    
-    // Store in collection 'otps'
-    await setDoc(doc(db, 'otps', normalizedEmail), {
-      otp: otpCode,
-      email: normalizedEmail,
-      attempts: 0,
-      createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes validity
-      verified: false,
-      type: 'reset'
-    });
-
-    console.log(`[🔐 SKY SMTP Sandboxed GateWay] Password Reset authorization OTP dispatched to ${normalizedEmail}. Code: ${otpCode}`);
-    return otpCode;
+    // Directly use Firebase Auth native password reset email flow
+    await sendPasswordResetEmail(auth, normalizedEmail);
+    return "";
   };
 
   const verifyOTP = async (email: string, code: string, type: 'registration' | 'reset'): Promise<any> => {
@@ -1432,19 +1373,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       throw new Error('Pending signup records were corrupt. Please register again.');
     }
     
-    // 1. Create User in Firebase Authentication
-    const userCredential = await createUserWithEmailAndPassword(auth, tempUserData.email, tempUserData.password);
-    const user = userCredential.user;
-    
-    // 2. Scan users collection to determine correct role slug
+    // 1. Scan users collection to determine correct role slug (since we are signed in, read is permitted)
     const allUsersSnap = await getDocs(collection(db, 'users'));
-    const isFirstUser = allUsersSnap.empty;
+    const activeUsers = allUsersSnap.docs.filter(d => d.data().status === 'active' && d.id !== tempUserData.uid);
+    const isFirstUser = activeUsers.length === 0;
     const roleSlug = isFirstUser ? 'superAdmin' : 'staff';
     const roleLabel: UserRole = isFirstUser ? 'Super Admin' : 'Staff';
     
-    // 3. Store formal permanent profile in collection 'users'
+    // 2. Store formal permanent profile in collection 'users'
     const newUserProfile = {
-      id: user.uid,
+      id: tempUserData.uid,
       name: tempUserData.name,
       email: tempUserData.email,
       role: roleSlug,
@@ -1453,12 +1391,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString()
     };
     
-    await setDoc(doc(db, 'users', user.uid), newUserProfile);
+    await setDoc(doc(db, 'users', tempUserData.uid), newUserProfile);
     
-    // 4. Delete the successfully compiled register OTP document safely
+    // 3. Delete the successfully compiled register OTP document safely
     await deleteDoc(doc(db, 'otps', email.trim().toLowerCase()));
     
-    // 5. Save details and update context state
+    // 4. Save details and update context state
     const matchedUser = {
       name: tempUserData.name,
       email: tempUserData.email,
@@ -1475,27 +1413,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const completeOTPPasswordReset = async (email: string, code: string, passwordReset: string): Promise<void> => {
-    await verifyOTP(email, code, 'reset');
-    
-    const normalizedEmail = email.trim().toLowerCase();
-    
-    // Retrieve correct user document matching email
-    const q = query(collection(db, 'users'), where('email', '==', normalizedEmail));
-    const snap = await getDocs(q);
-    
-    if (snap.empty) {
-      throw new Error('Matching user profile could not be localized.');
-    }
-    
-    const userDoc = snap.docs[0];
-    
-    // Update local passwordOverride field securely inside their Firestore document
-    await updateDoc(doc(db, 'users', userDoc.id), {
-      passwordOverride: passwordReset
-    });
-    
-    // Delete the successfully compiled reset OTP document safely
-    await deleteDoc(doc(db, 'otps', normalizedEmail));
+    // Deprecated in favor of direct Firebase Auth sendPasswordResetEmail
   };
 
   const logout = async () => {
