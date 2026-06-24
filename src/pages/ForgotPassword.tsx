@@ -4,7 +4,6 @@ import { useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Mail, ShieldCheck, KeyRound, ArrowLeft, RefreshCw, Key, CheckCircle, ShieldAlert, Lock, Check } from 'lucide-react';
 import skyLogo from '../components/Sky.jpeg';
-import { SandboxInbox } from '../components/SandboxInbox';
 
 export const ForgotPassword: React.FC = () => {
   const { sendResetOTP, verifyOTP, completeOTPPasswordReset } = useApp();
@@ -374,9 +373,6 @@ export const ForgotPassword: React.FC = () => {
                   </div>
 
                 </form>
-
-                {/* Render integrated SandboxInbox */}
-                <SandboxInbox email={email} />
               </motion.div>
             )}
 

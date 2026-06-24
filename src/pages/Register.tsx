@@ -4,7 +4,6 @@ import { useApp } from '../context/AppContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Mail, Lock, ShieldAlert, ArrowRight, Server, Building, KeyRound, Check, RefreshCw, Send } from 'lucide-react';
 import skyLogo from '../components/Sky.jpeg';
-import { SandboxInbox } from '../components/SandboxInbox';
 
 export const Register: React.FC = () => {
   const { sendRegisterOTP, completeOTPRegistration } = useApp();
@@ -550,9 +549,6 @@ export const Register: React.FC = () => {
               </motion.div>
             )}
           </AnimatePresence>
-
-          {/* Render integrated SandboxInbox */}
-          <SandboxInbox email={email} />
         </div>
 
         {/* Link back to login */}
