@@ -439,7 +439,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const items: User[] = [];
       snapshot.forEach((doc) => {
         const d = doc.data();
-        const mappedRole: UserRole = d.role === 'superAdmin' ? 'Super Admin' : d.role === 'admin' ? 'Admin' : 'Staff';
+        const emailLower = (d.email || '').toLowerCase();
+        // Skip mock/demo users
+        if (['hasib.sky@gmail.com', 'safayet.karim@skyautomation.com', 'anika.rahman@skyautomation.com', 'hasib.chowdhury@skyautomation.com', 'safayet@skyautomation.com'].includes(emailLower)) {
+          return;
+        }
+        const roleStr = String(d.role || '').toLowerCase().replace(/[^a-z]/g, '');
+        const mappedRole: UserRole = roleStr === 'superadmin' ? 'Super Admin' : roleStr === 'admin' ? 'Admin' : 'Staff';
         items.push({
           name: d.name,
           email: d.email,
@@ -708,15 +714,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           }
         }
+
+        // Direct fallback: ensure current user UID has superAdmin role
+        if (auth.currentUser && auth.currentUser.email?.toLowerCase() === 'skyautomationtech@gmail.com') {
+          const uid = auth.currentUser.uid;
+          const userDocRef = doc(db, 'users', uid);
+          const userDocSnap = await getDoc(userDocRef);
+          if (userDocSnap.exists()) {
+            const data = userDocSnap.data();
+            if (data.role !== 'superAdmin' || data.status !== 'active') {
+              await setDoc(userDocRef, {
+                ...data,
+                role: 'superAdmin',
+                status: 'active',
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+              console.log(`Directly updated current user doc ${uid} role to superAdmin`);
+            }
+          } else {
+            // Document doesn't exist, create it
+            await setDoc(userDocRef, {
+              id: uid,
+              name: 'Sky Automation Tech',
+              email: 'skyautomationtech@gmail.com',
+              role: 'superAdmin',
+              status: 'active',
+              createdAt: new Date().toISOString()
+            });
+            console.log(`Directly created missing user doc for ${uid} as superAdmin`);
+          }
+        }
       } catch (err) {
         console.error("Cleanup/Setup effect failed:", err);
       }
     };
     
-    if (isAuthenticated && currentUser?.email === 'skyautomationtech@gmail.com') {
+    if (isAuthenticated) {
       cleanupAndSetup();
     }
-  }, [isAuthenticated, currentUser]);
+  }, [isAuthenticated]);
 
   // Auto-scan existing products and generate missing barcodes automatically in background
   useEffect(() => {
