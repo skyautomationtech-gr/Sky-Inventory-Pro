@@ -328,7 +328,7 @@ export const Register: React.FC = () => {
                         type="text"
                         value={fullName}
                         onChange={(e) => setFullName(e.target.value)}
-                        placeholder="e.g. Hasib Chowdhury"
+                        placeholder="e.g. Shakil Ahmed"
                         className="w-full bg-[#111624]/80 border border-white/10 rounded-xl pl-11 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#DFFF4F] focus:ring-1 focus:ring-[#DFFF4F] transition-all font-semibold"
                       />
                     </div>

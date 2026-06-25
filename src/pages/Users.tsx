@@ -80,7 +80,7 @@ export const Users: React.FC = () => {
     setEmail('');
     setRole('Staff');
     setIsAdding(false);
-    setSuccessMsg(`User ${name} joined simulation successfully!`);
+    setSuccessMsg(`User ${name} created successfully!`);
     setTimeout(() => setSuccessMsg(''), 4000);
   };
 
@@ -96,8 +96,8 @@ export const Users: React.FC = () => {
       {/* Header */}
       <div id="users-hdr" className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold font-display tracking-tight text-[#090d16]">System Users & Simulation Directory</h2>
-          <p className="text-xs text-slate-500 mt-1 font-medium">Verify system clearing access levels, view operators logs, and simulate active roles</p>
+          <h2 className="text-2xl font-bold font-display tracking-tight text-[#090d16]">System Users Directory</h2>
+          <p className="text-xs text-slate-500 mt-1 font-medium">Verify system clearing access levels, view operators logs, and manage registered roles</p>
         </div>
         <div>
           <button
@@ -193,7 +193,7 @@ export const Users: React.FC = () => {
                           {isActive && (
                             <span className="inline-flex items-center gap-0.5 text-[8px] bg-teal-600/90 text-white font-mono uppercase px-1.5 py-0.5 rounded-full font-bold">
                               <UserCheck className="w-2.5 h-2.5" />
-                              <span>Simulating</span>
+                              <span>Active</span>
                             </span>
                           )}
                         </h4>
@@ -207,21 +207,6 @@ export const Users: React.FC = () => {
                           </span>
                         </div>
                       </div>
-                    </div>
-
-                    <div className="mt-4 pt-3.5 border-t border-slate-50 flex justify-end">
-                      <button
-                        onClick={() => setCurrentUserRole(user.role)}
-                        disabled={isActive}
-                        className={`text-xs px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1 ${
-                          isActive
-                            ? 'bg-teal-50 text-teal-700 cursor-not-allowed opacity-80'
-                            : 'bg-slate-50 hover:bg-teal-50 hover:text-teal-605 hover:text-teal-600 text-slate-600 border border-slate-100 hover:border-teal-200 cursor-pointer'
-                        }`}
-                      >
-                        <LogIn className="w-3.5 h-3.5" />
-                        <span>Simulate Session</span>
-                      </button>
                     </div>
                   </div>
                 );
@@ -237,7 +222,7 @@ export const Users: React.FC = () => {
               <UserPlus className="w-4 h-4 text-teal-600" />
               <span>Inbound Quick Addition</span>
             </h3>
-            <p className="text-[10px] text-slate-400 mt-0.5 font-semibold">Join the team as a simulator operators login profile</p>
+            <p className="text-[10px] text-slate-400 mt-0.5 font-semibold">Add a new registered team member or system operator</p>
           </div>
 
           <form onSubmit={handleAddUser} className="space-y-4">
@@ -288,8 +273,8 @@ export const Users: React.FC = () => {
           </form>
 
           <div className="bg-slate-50/55 rounded-xl border border-slate-100 p-3 text-[10px] text-slate-500 leading-normal flex items-start gap-1.5 font-medium">
-            <ShieldAlert className="w-4 h-4 text-emerald-600 self-start shrink-0 mt-0.5" />
-            <span>Simulation profiles created on this desk exist in runtime browser state but do not register permanent remote ledger records in real production servers.</span>
+            <ShieldAlert className="w-4 h-4 text-teal-600 self-start shrink-0 mt-0.5" />
+            <span>Only authorised users with valid roles are permitted to access different segments of the inventory system.</span>
           </div>
         </div>
 

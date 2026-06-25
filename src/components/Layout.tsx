@@ -237,9 +237,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
           </div>
 
           <div className="flex items-center gap-3 sm:gap-4">
-            {/* User Roles Quick Switcher Indicator */}
-            <div className="flex items-center gap-2 bg-slate-100/50 px-3 py-1.5 rounded-xl border border-slate-100">
-              <span className="text-[9px] text-slate-500 font-mono hidden sm:inline uppercase tracking-wider font-bold">SIMULATING AS:</span>
+            {/* Role Badge Indicator */}
+            <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 shadow-sm">
+              <span className="text-[9px] text-slate-400 font-mono hidden sm:inline uppercase tracking-wider font-bold">Role:</span>
               <div className={`text-xs px-2.5 py-0.5 rounded-lg font-bold border ${getRoleBadgeColor(currentUser.role)}`}>
                 {currentUser.role}
               </div>
@@ -257,7 +257,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               </div>
             )}
 
-            {/* Profile Dropdown Simulator */}
+            {/* Profile Dropdown Menu */}
             <div className="relative">
               <button
                 id="user-profile-button"
@@ -281,50 +281,11 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 <>
                   <div className="fixed inset-0 z-20" onClick={() => setIsUserDropdownOpen(false)}></div>
                   <div id="user-role-menu" className="absolute right-0 mt-2.5 w-60 bg-white border border-slate-150/90 rounded-2xl shadow-2xl p-2.5 z-30 animate-in fade-in zoom-in-95 duration-100">
-                    <p className="text-[9px] px-3.5 py-1.5 text-slate-400 uppercase font-mono tracking-widest font-bold">Configure Role / Session</p>
-                    
-                    {(authenticatedRole === 'Super Admin' || !authenticatedRole) && (
-                      <button
-                        id="role-select-super-admin"
-                        onClick={() => {
-                          setCurrentUserRole('Super Admin');
-                          setIsUserDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between text-left text-xs px-3.5 py-2.5 rounded-xl hover:bg-slate-55 hover:bg-slate-50 transition-colors ${currentUser.role === 'Super Admin' ? 'text-teal-605 text-teal-600 bg-teal-50/55 font-bold' : 'text-slate-600 font-medium'}`}
-                      >
-                        <span>Super Admin</span>
-                        {currentUser.role === 'Super Admin' && <span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span>}
-                      </button>
-                    )}
-                    
-                    {(authenticatedRole === 'Super Admin' || authenticatedRole === 'Admin' || !authenticatedRole) && (
-                      <button
-                        id="role-select-admin"
-                        onClick={() => {
-                          setCurrentUserRole('Admin');
-                          setIsUserDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between text-left text-xs px-3.5 py-2.5 rounded-xl hover:bg-slate-55 hover:bg-slate-50 transition-colors ${currentUser.role === 'Admin' ? 'text-teal-605 text-teal-600 bg-teal-50/55 font-bold' : 'text-slate-600 font-medium'}`}
-                      >
-                        <span>Admin</span>
-                        {currentUser.role === 'Admin' && <span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span>}
-                      </button>
-                    )}
-
-                    {(authenticatedRole === 'Super Admin' || authenticatedRole === 'Staff' || !authenticatedRole) && (
-                      <button
-                        id="role-select-staff"
-                        onClick={() => {
-                          setCurrentUserRole('Staff');
-                          setIsUserDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between text-left text-xs px-3.5 py-2.5 rounded-xl hover:bg-slate-55 hover:bg-slate-50 transition-colors ${currentUser.role === 'Staff' ? 'text-teal-605 text-teal-600 bg-teal-50/55 font-bold' : 'text-slate-600 font-medium'}`}
-                      >
-                        <span>Staff</span>
-                        {currentUser.role === 'Staff' && <span className="w-1.5 h-1.5 rounded-full bg-teal-500"></span>}
-                      </button>
-                    )}
-                    
+                    <p className="text-[9px] px-3.5 py-1.5 text-slate-400 uppercase font-mono tracking-widest font-bold">Account Profile</p>
+                    <div className="px-3.5 py-1.5">
+                      <p className="text-xs font-bold text-slate-800 leading-tight">{currentUser.name}</p>
+                      <p className="text-[10px] text-slate-500 leading-none mt-1">{currentUser.email}</p>
+                    </div>
                     <div className="border-t border-slate-100 my-1.5"></div>
                     <button
                       id="btn-user-logout"
@@ -337,10 +298,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     >
                       <span>Sign Out from ERP</span>
                     </button>
-                    <div className="border-t border-slate-100 my-1.5"></div>
-                    <div className="px-3.5 py-2 text-[10px] text-slate-400 leading-normal italic bg-slate-50 rounded-lg">
-                      Toggling roles switches operational layouts and feature lockouts live.
-                    </div>
                   </div>
                 </>
               )}

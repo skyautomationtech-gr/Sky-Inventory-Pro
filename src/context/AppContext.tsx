@@ -730,43 +730,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [loading, products]);
 
   const setCurrentUserRole = (role: UserRole) => {
-    if (authenticatedRole) {
-      if (authenticatedRole === 'Staff' && role !== 'Staff') {
-        console.warn(`Unauthorized role escalation attempt from Staff to ${role}`);
-        return;
-      }
-      if (authenticatedRole === 'Admin' && role === 'Super Admin') {
-        console.warn(`Unauthorized role escalation attempt from Admin to Super Admin`);
-        return;
-      }
-    }
-
-    let name = 'Hasib Chowdhury';
-    let avatar = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100';
-
-    if (role === 'Admin') {
-      name = 'Safayet Karim';
-      avatar = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=crop&q=80&w=100';
-    } else if (role === 'Staff') {
-      name = 'Anika Rahman';
-      avatar = 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=crop&q=80&w=100';
-    }
-
-    const matchedUser = users.find(u => u.role === role);
-    if (matchedUser) {
-      name = matchedUser.name;
-      avatar = matchedUser.avatar || avatar;
-    }
-
-    const updatedUser: User = {
-      name,
-      email: `${name.toLowerCase().replace(' ', '.')}@skyautomation.com`,
-      role,
-      avatar
-    };
-
-    setCurrentUser(updatedUser);
-    localStorage.setItem('sky_v2_user', JSON.stringify(updatedUser));
+    console.log(`Role action requested: ${role}`);
   };
 
   const addProduct = async (newProduct: Omit<Product, 'id' | 'sku'>) => {
