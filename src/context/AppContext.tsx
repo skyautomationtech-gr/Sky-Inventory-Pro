@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { Product, InventoryLog, Sale, Supplier, User, UserRole, PaymentMethod, SaleItem, Category, CreateSaleParams } from '../types';
-import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDocs, getDoc, query, where, runTransaction } from 'firebase/firestore';
+import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDocs, getDoc, query, where, runTransaction, orderBy, limit } from 'firebase/firestore';
 import { 
   onAuthStateChanged,
   createUserWithEmailAndPassword,
@@ -24,6 +24,7 @@ interface AppContextProps {
   addProduct: (product: Omit<Product, 'id' | 'sku'>) => void;
   updateProduct: (id: string, product: Partial<Product>) => void;
   deleteProduct: (id: string) => boolean;
+  generateMissingBarcodes: () => Promise<void>;
   adjustStock: (productId: string, type: 'Stock In' | 'Stock Out', quantity: number, notes?: string) => Promise<boolean>;
   createSale: (params: CreateSaleParams) => Promise<Sale | null>;
   editSale: (id: string, updatedParams: Partial<Sale>) => Promise<boolean>;
@@ -120,6 +121,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [authStateLoaded, setAuthStateLoaded] = useState(false);
+  const autoScanCheckedRef = useRef(false);
 
   // Real Firebase Auth state listener checking user activation level in Firestore
   useEffect(() => {
@@ -206,28 +208,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
       } else {
-        // Logged out or using custom LocalStorage fallback session
-        const localSessionActive = localStorage.getItem('sky_v2_session_active') === 'true';
-        const localUserStr = localStorage.getItem('sky_v2_user');
-        if (localSessionActive && localUserStr) {
-          try {
-            const localUser = JSON.parse(localUserStr);
-            if (localUser && localUser.email !== 'guest@skyautomation.com') {
-              setCurrentUser(localUser);
-              setAuthenticatedRole(localUser.role);
-              setIsAuthenticated(true);
-            } else {
-              setIsAuthenticated(false);
-              setAuthenticatedRole(null);
-            }
-          } catch (e) {
-            setIsAuthenticated(false);
-            setAuthenticatedRole(null);
-          }
-        } else {
-          setIsAuthenticated(false);
-          setAuthenticatedRole(null);
-        }
+        // Logged out of Firebase Auth - clear local storage active state and deny access
+        setIsAuthenticated(false);
+        setAuthenticatedRole(null);
+        localStorage.setItem('sky_v2_session_active', 'false');
+        localStorage.removeItem('sky_v2_auth_role');
       }
       setAuthStateLoaded(true);
       setLoading(false);
@@ -238,8 +223,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Listen to Firestore real-time collections
   useEffect(() => {
-    if (!authStateLoaded || !isAuthenticated) {
-      if (!isAuthenticated) {
+    if (!authStateLoaded || !isAuthenticated || !auth.currentUser) {
+      if (!isAuthenticated || !auth.currentUser) {
         setProducts([]);
         setInventoryLogs([]);
         setSales([]);
@@ -272,7 +257,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           thumbnailBase64: d.thumbnailBase64 || '',
           description: d.description || '',
           lowStockLimit: d.lowStockLimit !== undefined ? Number(d.lowStockLimit) : 10,
-          supplierName: d.supplierName || ''
+          supplierName: d.supplierName || '',
+          barcode: d.barcode || ''
         });
       });
       // Sort products by id/sku desc
@@ -641,6 +627,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [authStateLoaded]);
 
+  // Auto-scan existing products and generate missing barcodes automatically in background
+  useEffect(() => {
+    if (!loading && products.length > 0 && !autoScanCheckedRef.current) {
+      const missing = products.filter(p => !p.barcode);
+      if (missing.length > 0) {
+        autoScanCheckedRef.current = true;
+        generateMissingBarcodes();
+      }
+    }
+  }, [loading, products]);
+
   const setCurrentUserRole = (role: UserRole) => {
     if (authenticatedRole) {
       if (authenticatedRole === 'Staff' && role !== 'Staff') {
@@ -692,6 +689,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const nextSkuNum = maxSkuNum + 1;
       const sku = `SAT-P-${String(nextSkuNum).padStart(4, '0')}`;
 
+      // Calculate next barcode number SAT-000001, SAT-000002, etc.
+      const maxBarcodeNum = products.reduce((max, p) => {
+        if (!p.barcode) return max;
+        const match = p.barcode.match(/SAT-(\d+)/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          return num > max ? num : max;
+        }
+        return max;
+      }, 0);
+      const nextBarcodeNum = maxBarcodeNum + 1;
+      const barcode = `SAT-${String(nextBarcodeNum).padStart(6, '0')}`;
+
       const productDoc = {
         id,
         name: newProduct.name,
@@ -706,6 +716,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         imageUrl: newProduct.image || '',
         imageBase64: newProduct.imageBase64 || newProduct.image || '',
         thumbnailBase64: newProduct.thumbnailBase64 || '',
+        barcode,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
@@ -734,6 +745,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const generateMissingBarcodes = async (): Promise<void> => {
+    try {
+      const missing = products.filter(p => !p.barcode);
+      if (missing.length === 0) {
+        return;
+      }
+
+      let maxBarcodeNum = products.reduce((max, p) => {
+        if (!p.barcode) return max;
+        const match = p.barcode.match(/SAT-(\d+)/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          return num > max ? num : max;
+        }
+        return max;
+      }, 0);
+
+      console.log(`Starting bulk generation for ${missing.length} products. Starting from offset ${maxBarcodeNum}`);
+
+      for (const prod of missing) {
+        maxBarcodeNum += 1;
+        const barcode = `SAT-${String(maxBarcodeNum).padStart(6, '0')}`;
+        await updateDoc(doc(db, 'products', prod.id), {
+          barcode,
+          updatedAt: new Date().toISOString()
+        });
+        console.log(`Auto-generated barcode ${barcode} for ${prod.name}`);
+      }
+    } catch (error) {
+      console.error("Error generating missing barcodes:", error);
+    }
+  };
+
   const updateProduct = async (id: string, updatedParams: Partial<Product>) => {
     try {
       const existingProduct = products.find(p => p.id === id);
@@ -759,6 +803,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (updatedParams.description !== undefined) updateData.description = updatedParams.description;
       if (updatedParams.lowStockLimit !== undefined) updateData.lowStockLimit = Number(updatedParams.lowStockLimit);
       if (updatedParams.supplierName !== undefined) updateData.supplierName = updatedParams.supplierName;
+      if (updatedParams.barcode !== undefined) updateData.barcode = updatedParams.barcode;
       
       if (updatedParams.stock !== undefined) {
         const newStock = Number(updatedParams.stock);
@@ -858,14 +903,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const createSale = async (params: CreateSaleParams): Promise<Sale | null> => {
     try {
+      console.log("createSale Started inside AppContext.tsx", params);
       const nowStr = new Date().toISOString();
       const saleId = `sale-${Date.now()}`;
       
+      // 1. Query the latest sales record to determine the next invoice number
+      // This completely bypasses the restricted 'counters' collection
+      const qSales = query(
+        collection(db, 'sales'),
+        orderBy('invoiceNo', 'desc'),
+        limit(1)
+      );
+      console.log("Fetching latest sales for invoice No generation...");
+      const salesSnap = await getDocs(qSales);
+      let nextSalesNum = 1;
+      if (!salesSnap.empty) {
+        const lastSale = salesSnap.docs[0].data();
+        if (lastSale.invoiceNo) {
+          const match = lastSale.invoiceNo.match(/\d+/);
+          if (match) {
+            nextSalesNum = parseInt(match[0], 10) + 1;
+          }
+        }
+      }
+      const computedInvoiceNo = `SAT-GR-${String(nextSalesNum).padStart(4, '0')}`;
+      console.log("Computed next invoiceNo:", computedInvoiceNo);
+
+      const saleItems: SaleItem[] = [];
+      let calculatedProfit = 0;
+      
       const invoiceNo = await runTransaction(db, async (transaction) => {
         let totalProfit = 0;
-        const saleItems: SaleItem[] = [];
+        saleItems.length = 0; // Clear array in case of retry
 
-        // 1. Process inventory updates
+        // Process inventory updates
         for (const item of params.items) {
           const prodRef = doc(db, 'products', item.productId);
           const prodSnap = await transaction.get(prodRef);
@@ -910,37 +981,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         }
         
-        // 2. Manage Invoice Counter
-        const counterRef = doc(db, 'counters', 'invoiceCounter');
-        const counterSnap = await transaction.get(counterRef);
-        let nextSalesNum = 1;
-        if (counterSnap.exists()) {
-          nextSalesNum = counterSnap.data().lastInvoiceNo + 1;
-        }
-        transaction.set(counterRef, { lastInvoiceNo: nextSalesNum }, { merge: true });
-        const invoiceNo = `SAT-GR-${String(nextSalesNum).padStart(4, '0')}`;
-        
-        // 3. Write Sale
+        calculatedProfit = totalProfit;
+
+        // 2. Write Sale with populated items
         transaction.set(doc(db, 'sales', saleId), {
           id: saleId,
-          invoiceNo,
-          ...params,
-          profit: totalProfit,
+          invoiceNo: computedInvoiceNo,
+          customerName: params.customerName,
+          customerPhone: params.customerPhone || '',
+          customerAddress: params.customerAddress || '',
+          brand: params.brand || '',
+          platform: params.platform || '',
+          courier: params.courier || '',
+          trackingId: params.trackingId || '',
+          subtotal: params.subtotal,
+          discount: params.discount,
+          deliveryCharge: params.deliveryCharge,
+          totalAmount: params.totalAmount,
+          paymentMethod: params.paymentMethod,
+          paymentStatus: params.paymentStatus,
           amountPaid: Number(params.amountPaid),
+          transactionId: params.transactionId || '',
+          notes: params.notes || '',
+          signatureDataUrl: params.signatureDataUrl || '',
+          items: saleItems,
+          profit: totalProfit,
           createdBy: currentUser.name,
           createdAt: nowStr
         });
         
-        // 4. Write Invoice
+        // 3. Write Invoice
         transaction.set(doc(db, 'invoices', `inv-${saleId}`), {
           id: `inv-${saleId}`,
-          invoiceNo,
+          invoiceNo: computedInvoiceNo,
           saleId,
-          ...params,
+          customerName: params.customerName,
+          customerPhone: params.customerPhone || '',
+          customerAddress: params.customerAddress || '',
+          items: saleItems,
+          totalAmount: params.totalAmount,
+          paymentMethod: params.paymentMethod,
           createdAt: nowStr
         });
         
-        return invoiceNo;
+        return computedInvoiceNo;
       });
 
       return {
@@ -948,11 +1032,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         invoiceNo,
         staffName: currentUser.name,
         timestamp: nowStr,
-        ...params,
-        items: [], // Simplified for result
-        totalProfit: 0 // Simplified for result
+        customerName: params.customerName,
+        customerPhone: params.customerPhone,
+        customerAddress: params.customerAddress,
+        brand: params.brand,
+        platform: params.platform,
+        courier: params.courier,
+        trackingId: params.trackingId,
+        subtotal: params.subtotal,
+        discount: params.discount,
+        deliveryCharge: params.deliveryCharge,
+        totalAmount: params.totalAmount,
+        paymentMethod: params.paymentMethod,
+        paymentStatus: params.paymentStatus,
+        amountPaid: params.amountPaid,
+        transactionId: params.transactionId,
+        notes: params.notes,
+        signatureDataUrl: params.signatureDataUrl,
+        items: saleItems,
+        totalProfit: calculatedProfit
       };
     } catch (error) {
+      console.log("createSale Failed", error);
       console.error("Error creating sale:", error);
       handleFirestoreError(error, OperationType.WRITE, `sales/create`);
       return null;
@@ -1455,6 +1556,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addProduct,
       updateProduct,
       deleteProduct,
+      generateMissingBarcodes,
       adjustStock,
       createSale,
       editSale,

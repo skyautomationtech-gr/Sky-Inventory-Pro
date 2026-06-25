@@ -22,6 +22,7 @@ export interface Product {
   supplierName?: string;
   imageBase64?: string;
   thumbnailBase64?: string;
+  barcode?: string; // Automatically generated barcode e.g., "SAT-000001"
 }
 
 export type InventoryActionType = 'Stock In' | 'Stock Out';

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import * as Icons from 'lucide-react';
 import { Product } from '../types';
+import { BarcodeRenderer } from '../components/BarcodeRenderer';
 
 export const Products: React.FC = () => {
   const { 
@@ -10,6 +11,7 @@ export const Products: React.FC = () => {
     addProduct, 
     updateProduct, 
     deleteProduct, 
+    generateMissingBarcodes,
     loading,
     categories,
     addCategory,
@@ -28,6 +30,7 @@ export const Products: React.FC = () => {
   const [isModifyModalOpen, setIsModifyModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [viewingProduct, setViewingProduct] = useState<Product | null>(null);
+  const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
   
   // Multi-form items
   const [formName, setFormName] = useState('');
@@ -438,19 +441,36 @@ export const Products: React.FC = () => {
         <div className="flex items-center gap-2">
           {/* Admin category management access trigger */}
           {(currentUser.role === 'Super Admin' || currentUser.role === 'Admin') && (
-            <button
-              id="btn-manage-categories"
-              onClick={() => {
-                setIsCategoryFormOpen(false);
-                setCategoryEditing(null);
-                setIsCategoryManagerOpen(true);
-              }}
-              className="flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200/80 text-slate-700 px-4.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold border border-slate-200 transition-colors shrink-0 cursor-pointer"
-              title="Manage Categories (Admin Only)"
-            >
-              <Icons.Settings className="w-4 h-4 text-slate-500 font-bold animate-spin-hover" />
-              <span>Manage Categories</span>
-            </button>
+            <>
+              <button
+                id="btn-generate-barcodes"
+                onClick={async () => {
+                  const confirmGen = window.confirm("Are you sure you want to scan and generate missing barcodes for all products?");
+                  if (confirmGen) {
+                    await generateMissingBarcodes();
+                  }
+                }}
+                className="flex items-center justify-center gap-1.5 bg-indigo-50 hover:bg-indigo-100/80 text-indigo-700 px-4.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold border border-indigo-200 transition-colors shrink-0 cursor-pointer"
+                title="Generate barcodes for all items missing them (Admin Only)"
+              >
+                <Icons.Barcode className="w-4 h-4 text-indigo-500 font-bold" />
+                <span>Generate Barcodes</span>
+              </button>
+
+              <button
+                id="btn-manage-categories"
+                onClick={() => {
+                  setIsCategoryFormOpen(false);
+                  setCategoryEditing(null);
+                  setIsCategoryManagerOpen(true);
+                }}
+                className="flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200/80 text-slate-700 px-4.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold border border-slate-200 transition-colors shrink-0 cursor-pointer"
+                title="Manage Categories (Admin Only)"
+              >
+                <Icons.Settings className="w-4 h-4 text-slate-500 font-bold animate-spin-hover" />
+                <span>Manage Categories</span>
+              </button>
+            </>
           )}
 
           <button
@@ -641,6 +661,7 @@ export const Products: React.FC = () => {
                 <th className="py-3.5 px-6">Image</th>
                 <th className="py-3.5 px-4">Product Name</th>
                 <th className="py-3.5 px-4">SKU Code</th>
+                <th className="py-3.5 px-4">Barcode</th>
                 <th className="py-3.5 px-4">Category</th>
                 <th className="py-3.5 px-4">Brand</th>
                 <th className="py-3.5 px-4">Cost (In)</th>
@@ -653,7 +674,7 @@ export const Products: React.FC = () => {
             <tbody className="divide-y divide-slate-50 text-xs">
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="py-20 text-center text-slate-400">
+                  <td colSpan={11} className="py-20 text-center text-slate-400">
                     <div className="flex flex-col items-center justify-center space-y-3">
                       <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
                       <p className="text-slate-600 font-bold">Syncing product catalog...</p>
@@ -663,7 +684,7 @@ export const Products: React.FC = () => {
                 </tr>
               ) : filteredProducts.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-20 text-center text-sm text-slate-400">
+                  <td colSpan={11} className="py-20 text-center text-sm text-slate-400">
                     <div className="flex flex-col items-center justify-center space-y-3">
                       <Icons.FolderPlus className="w-12 h-12 text-slate-200" />
                       <p className="text-slate-700 font-bold">No Products Recorded</p>
@@ -731,6 +752,23 @@ export const Products: React.FC = () => {
                         </div>
                       </td>
 
+                      {/* Barcode */}
+                      <td className="py-4 px-4 font-mono text-slate-600">
+                        <div className="flex items-center gap-1.5">
+                          <Icons.Barcode className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span className="font-semibold">{p.barcode || 'N/A'}</span>
+                          {p.barcode && (
+                            <button
+                              onClick={() => setBarcodeProduct(p)}
+                              className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-indigo-600 transition-all cursor-pointer"
+                              title="View, Print & Download Barcode"
+                            >
+                              <Icons.Eye className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+
                       {/* Category */}
                       <td className="py-4 px-4">
                         <span className="px-2 py-0.5 bg-slate-50 border border-slate-100 rounded text-slate-600 font-mono text-[9px] font-bold">
@@ -792,6 +830,16 @@ export const Products: React.FC = () => {
                           >
                             <Icons.Eye className="w-3.5 h-3.5" />
                           </button>
+
+                          {p.barcode && (
+                            <button
+                              onClick={() => setBarcodeProduct(p)}
+                              className="p-1.5 text-indigo-500 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg border border-slate-100 hover:border-indigo-100 transition-all shadow-sm cursor-pointer"
+                              title="View, Print & Download Barcode"
+                            >
+                              <Icons.Barcode className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           
                           <button
                             id={`btn-edit-${p.id}`}
@@ -956,6 +1004,20 @@ export const Products: React.FC = () => {
                 </div>
               </div>
 
+              {/* Product Barcode Display Block */}
+              {viewingProduct.barcode && (
+                <div className="border border-slate-100 p-4.5 rounded-2xl bg-slate-50/50 space-y-3 shadow-sm">
+                  <h5 className="text-[10px] uppercase font-bold text-slate-400 tracking-wider font-mono">
+                    Product Barcode & Labels
+                  </h5>
+                  <BarcodeRenderer 
+                    barcode={viewingProduct.barcode} 
+                    name={viewingProduct.name} 
+                    sku={viewingProduct.sku} 
+                  />
+                </div>
+              )}
+
               {/* Supplier & Logistics Mapping */}
               <div className="border border-slate-100 p-4 rounded-2xl bg-white space-y-2.5 shadow-sm">
                 <h5 className="text-[10px] uppercase font-bold text-slate-400 tracking-wider font-mono">
@@ -1011,6 +1073,50 @@ export const Products: React.FC = () => {
                 className="px-5 py-2.5 bg-slate-855 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs transition-colors shadow-sm cursor-pointer"
               >
                 Close Sheet
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {barcodeProduct && (
+        <div className="fixed inset-0 bg-slate-950/45 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-150">
+          <div className="bg-white border border-slate-150 rounded-3xl w-full max-w-sm overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+              <div>
+                <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-200 rounded text-indigo-700 font-mono text-[9px] font-bold uppercase tracking-wider">
+                  Product Barcode Label
+                </span>
+                <h3 className="font-display font-extrabold text-[#090d16] text-sm mt-0.5">
+                  Print & Save Label
+                </h3>
+              </div>
+              <button 
+                onClick={() => setBarcodeProduct(null)} 
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
+              >
+                <Icons.X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 flex flex-col items-center justify-center">
+              <BarcodeRenderer 
+                barcode={barcodeProduct.barcode || ''} 
+                name={barcodeProduct.name} 
+                sku={barcodeProduct.sku} 
+              />
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setBarcodeProduct(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition-colors shadow-sm cursor-pointer"
+              >
+                Close Label
               </button>
             </div>
           </div>

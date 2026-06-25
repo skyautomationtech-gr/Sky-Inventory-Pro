@@ -28,7 +28,9 @@ import {
   DollarSign,
   ShieldCheck,
   Cpu,
-  Gift
+  Gift,
+  Scan,
+  Search
 } from 'lucide-react';
 import { PaymentMethod, Sale, CreateSaleParams } from '../types';
 import { jsPDF } from 'jspdf';
@@ -139,6 +141,10 @@ export const Sales: React.FC = () => {
   const [billItems, setBillItems] = useState<{ productId: string; quantity: number; serialNumber?: string }[]>([
     { productId: '', quantity: 1, serialNumber: generateSerial() }
   ]);
+
+  // Barcode Scanner Integration states
+  const [barcodeQuery, setBarcodeQuery] = useState('');
+  const [scannerFeedback, setScannerFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // 4. Delivery States
   const [selectedCourier, setSelectedCourier] = useState<string>('Steadfast');
@@ -281,6 +287,71 @@ export const Sales: React.FC = () => {
     setSaleError('');
   };
 
+  // Barcode / SKU Scan Processor
+  const handleBarcodeScan = (scannedCode: string) => {
+    const code = scannedCode.trim();
+    if (!code) return;
+
+    // Search for matching product in context
+    const matchedProduct = products.find(p => 
+      (p.barcode && p.barcode.toLowerCase() === code.toLowerCase()) || 
+      (p.sku && p.sku.toLowerCase() === code.toLowerCase())
+    );
+
+    if (matchedProduct) {
+      // Check if product is already in billItems list
+      const existingIdx = billItems.findIndex(item => item.productId === matchedProduct.id);
+      
+      if (existingIdx !== -1) {
+        // Increment quantity of existing item
+        setBillItems(prev => prev.map((item, idx) => {
+          if (idx === existingIdx) {
+            return { ...item, quantity: item.quantity + 1 };
+          }
+          return item;
+        }));
+        setScannerFeedback({
+          type: 'success',
+          message: `Added another "${matchedProduct.name}" to cart!`
+        });
+      } else {
+        // Look for an empty item line to replace
+        const emptyIdx = billItems.findIndex(item => item.productId === '');
+        if (emptyIdx !== -1) {
+          setBillItems(prev => prev.map((item, idx) => {
+            if (idx === emptyIdx) {
+              return { ...item, productId: matchedProduct.id, quantity: 1 };
+            }
+            return item;
+          }));
+        } else {
+          // Append a completely new line
+          setBillItems(prev => [...prev, { productId: matchedProduct.id, quantity: 1, serialNumber: generateSerial() }]);
+        }
+        setScannerFeedback({
+          type: 'success',
+          message: `"${matchedProduct.name}" added to cart!`
+        });
+      }
+      setBarcodeQuery('');
+    } else {
+      setScannerFeedback({
+        type: 'error',
+        message: `No product found matching barcode or SKU: "${code}"`
+      });
+    }
+
+    // Auto-clear scanner feedback after 3.5 seconds
+    setTimeout(() => {
+      setScannerFeedback(prev => {
+        if (prev && prev.message.includes(code)) {
+          return null;
+        }
+        return prev;
+      });
+    }, 3500);
+  };
+
   // Remove cart line row
   const handleRemoveCartRow = (idx: number) => {
     setBillItems(prev => prev.filter((_, i) => i !== idx));
@@ -314,15 +385,18 @@ export const Sales: React.FC = () => {
   // POS Submit action (Save in Firestore, perform stock updates, inventory logs, reset fields)
   const handleInvoiceCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("Save Sale Clicked");
     setSaleError('');
     setSaleSuccess('');
 
     // Form inputs checks
     if (!customerName.trim()) {
+      console.log("createSale Failed - missing Customer Name");
       setSaleError('Input Failure: Please specify Customer Name.');
       return;
     }
     if (billItems.length === 0 || billItems.some(it => !it.productId)) {
+      console.log("createSale Failed - empty or invalid bill items");
       setSaleError('Cart Failure: Please choose unique products in all lines.');
       return;
     }
@@ -331,10 +405,12 @@ export const Sales: React.FC = () => {
     for (const item of billItems) {
       const prod = products.find(p => p.id === item.productId);
       if (!prod) {
+        console.log("createSale Failed - product does not exist", item.productId);
         setSaleError('Product Failure: Chosen physical item does not exist.');
         return;
       }
       if (prod.stock < item.quantity) {
+        console.log("createSale Failed - insufficient stock", prod.name, prod.stock, item.quantity);
         setSaleError(`Inventory limit hit: Insufficient stock for "${prod.name}". Available physical: ${prod.stock} items.`);
         return;
       }
@@ -343,6 +419,7 @@ export const Sales: React.FC = () => {
     setIsCreatingSale(true);
 
     try {
+      console.log("createSale Started");
       const payload: CreateSaleParams = {
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
@@ -369,6 +446,7 @@ export const Sales: React.FC = () => {
 
       const result = await createSale(payload);
       if (result) {
+        console.log("createSale Success", result);
         setSaleSuccess(`Checkout successful! Invoice ${result.invoiceNo} issued and database synchronized.`);
         
         // Add loyalty points if a valid customer phone is provided
@@ -426,9 +504,11 @@ export const Sales: React.FC = () => {
         // Scroll to top
         window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
+        console.log("createSale Failed - returned null");
         setSaleError('Checkout Error: Firebase transaction declined. Please check inputs.');
       }
     } catch (err: any) {
+      console.log("createSale Failed", err);
       console.error(err);
       setSaleError(`Checkout Error: ${err.message || 'An unexpected error occurred.'}`);
     } finally {
@@ -523,10 +603,58 @@ export const Sales: React.FC = () => {
     const originalGetComputedStyle = window.getComputedStyle;
 
     try {
-      // 1. Temporarily override document.styleSheets to be empty [] so html2canvas doesn't try to parse CSS files directly and crash
+      // 1. Temporarily override document.styleSheets with a dynamic virtual proxy that sanitizes oklch values on-the-fly
+      // This prevents html2canvas's CSS parser from crashing while preserving all layout, flexbox, border, and spacing rules
+      const originalStyleSheets = document.styleSheets;
+      let proxiedSheets: any[] = [];
+      try {
+        proxiedSheets = Array.from(originalStyleSheets).map(sheet => {
+          return new Proxy(sheet, {
+            get(target, prop, receiver) {
+              if (prop === 'cssRules') {
+                try {
+                  const rules = target.cssRules;
+                  if (!rules) return rules;
+                  return new Proxy(rules, {
+                    get(rulesTarget, rulesProp) {
+                      if (rulesProp === 'length') {
+                        return rulesTarget.length;
+                      }
+                      const idx = Number(rulesProp);
+                      if (!isNaN(idx)) {
+                        const rule = rulesTarget[idx];
+                        if (!rule) return rule;
+                        return new Proxy(rule, {
+                          get(ruleTarget, ruleProp) {
+                            if (ruleProp === 'cssText') {
+                              const originalText = ruleTarget.cssText;
+                              if (typeof originalText === 'string') {
+                                return convertOklchToRgb(originalText);
+                              }
+                            }
+                            return Reflect.get(ruleTarget, ruleProp, ruleTarget);
+                          }
+                        });
+                      }
+                      return Reflect.get(rulesTarget, rulesProp, rulesTarget);
+                    }
+                  });
+                } catch (e) {
+                  // Ignore security/origin errors
+                  return null;
+                }
+              }
+              return Reflect.get(target, prop, target);
+            }
+          });
+        });
+      } catch (e) {
+        console.error('Failed to prepare styleSheets proxy:', e);
+      }
+
       Object.defineProperty(document, 'styleSheets', {
         get() {
-          return [];
+          return proxiedSheets.length > 0 ? proxiedSheets : originalStyleSheets;
         },
         configurable: true
       });
@@ -886,6 +1014,53 @@ export const Sales: React.FC = () => {
                 <Plus className="w-3.5 h-3.5" />
                 <span>Add Item Line</span>
               </button>
+            </div>
+
+            {/* Barcode Quick Scan Input Bar */}
+            <div className="bg-slate-50/50 border border-dashed border-slate-200 p-4.5 rounded-2xl space-y-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <div className="relative flex-1">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                    <Scan className="w-4 h-4 animate-pulse text-indigo-500" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Fast Scan Barcode / SKU... (e.g. SAT-000001)"
+                    value={barcodeQuery}
+                    onChange={(e) => setBarcodeQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault(); // crucial to prevent form submit on enter
+                        handleBarcodeScan(barcodeQuery);
+                      }
+                    }}
+                    className="w-full bg-white border border-slate-200 focus:border-indigo-500 rounded-xl pl-10 pr-4 py-2.5 text-xs font-mono font-semibold placeholder-slate-400 focus:outline-none transition-all shadow-xs"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleBarcodeScan(barcodeQuery)}
+                  className="flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-indigo-500/10 transition-colors cursor-pointer"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  <span>Lookup</span>
+                </button>
+              </div>
+
+              {/* Real-time scan result feedback logs */}
+              {scannerFeedback && (
+                <div className={`p-2 rounded-xl text-[10px] font-bold font-mono border flex items-center gap-1.5 animate-in fade-in duration-150 ${
+                  scannerFeedback.type === 'success' 
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                    : 'bg-rose-50 text-rose-700 border-rose-100'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${scannerFeedback.type === 'success' ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
+                  <span>{scannerFeedback.message}</span>
+                </div>
+              )}
+              <p className="text-[10px] text-slate-400 italic">
+                💡 <strong>Pro Tip</strong>: Focus this field to scan physical labels using a hardware barcode scanner.
+              </p>
             </div>
 
             <div className="space-y-3.5">
