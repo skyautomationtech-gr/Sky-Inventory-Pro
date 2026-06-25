@@ -7,7 +7,10 @@ import {
   signInWithEmailAndPassword,
   sendEmailVerification,
   sendPasswordResetEmail,
-  signOut
+  signOut,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence
 } from 'firebase/auth';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 
@@ -50,6 +53,7 @@ interface AppContextProps {
   verifyOTP: (email: string, code: string, type: 'registration' | 'reset') => Promise<any>;
   completeOTPRegistration: (email: string, code: string) => Promise<void>;
   completeOTPPasswordReset: (email: string, code: string, passwordReset: string) => Promise<void>;
+  addActivityLog: (type: string, email: string, details: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextProps | undefined>(undefined);
@@ -123,6 +127,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [authStateLoaded, setAuthStateLoaded] = useState(false);
   const autoScanCheckedRef = useRef(false);
 
+  const addActivityLog = async (type: string, email: string, details: string) => {
+    try {
+      const logId = `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+      await setDoc(doc(db, 'activity_logs', logId), {
+        id: logId,
+        type,
+        email,
+        details,
+        timestamp: new Date().toISOString()
+      });
+    } catch (e) {
+      console.error("Failed to write activity log:", e);
+    }
+  };
+
   // Real Firebase Auth state listener checking user activation level in Firestore
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -130,20 +149,77 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (user) {
         const freshUser = auth.currentUser;
         if (freshUser) {
+          if (!freshUser.emailVerified) {
+            setIsAuthenticated(false);
+            setAuthenticatedRole(null);
+            localStorage.setItem('sky_v2_session_active', 'false');
+            setAuthStateLoaded(true);
+            setLoading(false);
+            return;
+          }
           try {
             const userEmail = freshUser.email?.toLowerCase() || '';
             const userDocRef = doc(db, 'users', freshUser.uid);
-            const userDocSnap = await getDoc(userDocRef);
+            let userDocSnap = await getDoc(userDocRef);
 
             let matchedUser: User;
             let isActive = false;
+            let userData: any = null;
 
             if (userDocSnap.exists()) {
-              const userData = userDocSnap.data();
+              userData = userDocSnap.data();
+            } else {
+              // Search users collection by email fallback to support preexisting user documents
+              try {
+                const usersRef = collection(db, 'users');
+                const q = query(usersRef, where('email', '==', userEmail));
+                const querySnap = await getDocs(q);
+                if (!querySnap.empty) {
+                  userData = querySnap.docs[0].data();
+                  // Migrate user profile under their actual Firebase auth uid
+                  const migratedDoc = {
+                    ...userData,
+                    id: freshUser.uid,
+                    updatedAt: new Date().toISOString()
+                  };
+                  await setDoc(doc(db, 'users', freshUser.uid), migratedDoc);
+                }
+              } catch (err) {
+                console.error("Error searching user by email fallback:", err);
+              }
+            }
+
+            if (userEmail === 'skyautomationtech@gmail.com') {
+              if (!userData) {
+                userData = {
+                  name: 'Sky Automation Tech',
+                  email: userEmail,
+                  role: 'superAdmin',
+                  status: 'active'
+                };
+              } else {
+                userData.role = 'superAdmin';
+                userData.status = 'active';
+              }
+              try {
+                await setDoc(doc(db, 'users', freshUser.uid), {
+                  ...userData,
+                  id: freshUser.uid,
+                  role: 'superAdmin',
+                  status: 'active',
+                  updatedAt: new Date().toISOString()
+                }, { merge: true });
+              } catch (err) {
+                console.error("Error setting skyautomationtech role:", err);
+              }
+            }
+
+            if (userData) {
               isActive = userData.status === 'active';
               
               if (isActive) {
-                const mappedRole: UserRole = userData.role === 'superAdmin' ? 'Super Admin' : userData.role === 'admin' ? 'Admin' : 'Staff';
+                const roleStr = String(userData.role || '').toLowerCase().replace(/[^a-z]/g, '');
+                const mappedRole: UserRole = roleStr === 'superadmin' ? 'Super Admin' : roleStr === 'admin' ? 'Admin' : 'Staff';
                 matchedUser = {
                   name: userData.name || freshUser.displayName || 'Enterprise Operator',
                   email: userEmail,
@@ -357,60 +433,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     unsubscribers.push(unsubSuppliers);
 
-    // 5. Listen to users (Auto-seed if empty)
+    // 5. Listen to users (No default auto-seeding)
     const qUsers = collection(db, 'users');
     const unsubUsers = onSnapshot(qUsers, async (snapshot) => {
-      if (snapshot.empty) {
-        const defaultUsers = [
-          {
-            id: 'u-1',
-            name: 'Hasib Chowdhury',
-            email: 'hasib.sky@gmail.com',
-            role: 'superAdmin',
-            status: 'active',
-            avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100',
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: 'u-2',
-            name: 'Safayet Karim',
-            email: 'safayet.karim@skyautomation.com',
-            role: 'admin',
-            status: 'active',
-            avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=100',
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: 'u-3',
-            name: 'Anika Rahman',
-            email: 'anika.rahman@skyautomation.com',
-            role: 'staff',
-            status: 'active',
-            avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=100',
-            createdAt: new Date().toISOString()
-          }
-        ];
-        for (const u of defaultUsers) {
-          try {
-            await setDoc(doc(db, 'users', u.id), u);
-          } catch (e) {
-            console.error("Auto seeding user failed", e);
-          }
-        }
-      } else {
-        const items: User[] = [];
-        snapshot.forEach((doc) => {
-          const d = doc.data();
-          const mappedRole: UserRole = d.role === 'superAdmin' ? 'Super Admin' : d.role === 'admin' ? 'Admin' : 'Staff';
-          items.push({
-            name: d.name,
-            email: d.email,
-            role: mappedRole,
-            avatar: d.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100'
-          });
+      const items: User[] = [];
+      snapshot.forEach((doc) => {
+        const d = doc.data();
+        const mappedRole: UserRole = d.role === 'superAdmin' ? 'Super Admin' : d.role === 'admin' ? 'Admin' : 'Staff';
+        items.push({
+          name: d.name,
+          email: d.email,
+          role: mappedRole,
+          avatar: d.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100'
         });
-        setUsers(items);
-      }
+      });
+      setUsers(items);
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'users');
     });
@@ -626,6 +663,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubscribers.forEach(unsub => unsub());
     };
   }, [authStateLoaded]);
+
+  // Cleanup default mock users from Firestore and make skyautomationtech@gmail.com Super Admin
+  useEffect(() => {
+    const cleanupAndSetup = async () => {
+      try {
+        // 1. Delete default mock users with IDs 'u-1', 'u-2', 'u-3'
+        const mockUserIds = ['u-1', 'u-2', 'u-3'];
+        for (const uid of mockUserIds) {
+          const docRef = doc(db, 'users', uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            await deleteDoc(docRef);
+            console.log(`Removed default mock user doc: ${uid}`);
+          }
+        }
+
+        // 2. Query and delete docs with mock emails
+        const mockEmails = ['hasib.sky@gmail.com', 'safayet.karim@skyautomation.com', 'anika.rahman@skyautomation.com'];
+        for (const email of mockEmails) {
+          const q = query(collection(db, 'users'), where('email', '==', email));
+          const querySnap = await getDocs(q);
+          for (const d of querySnap.docs) {
+            await deleteDoc(doc(db, 'users', d.id));
+            console.log(`Deleted mock email doc: ${d.id} (${email})`);
+          }
+        }
+
+        // 3. Make skyautomationtech@gmail.com Super Admin in Firestore
+        const skyEmail = 'skyautomationtech@gmail.com';
+        const qSky = query(collection(db, 'users'), where('email', '==', skyEmail));
+        const skySnap = await getDocs(qSky);
+        if (!skySnap.empty) {
+          for (const d of skySnap.docs) {
+            const data = d.data();
+            if (data.role !== 'superAdmin' || data.status !== 'active') {
+              await setDoc(doc(db, 'users', d.id), {
+                ...data,
+                role: 'superAdmin',
+                status: 'active',
+                updatedAt: new Date().toISOString()
+              }, { merge: true });
+              console.log(`Permanently updated ${skyEmail} role to superAdmin in Firestore`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Cleanup/Setup effect failed:", err);
+      }
+    };
+    
+    if (isAuthenticated && currentUser?.email === 'skyautomationtech@gmail.com') {
+      cleanupAndSetup();
+    }
+  }, [isAuthenticated, currentUser]);
 
   // Auto-scan existing products and generate missing barcodes automatically in background
   useEffect(() => {
@@ -1059,7 +1150,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return computedInvoiceNo;
       });
 
-      return {
+      const resultSale = {
         id: saleId,
         invoiceNo,
         staffName: currentUser.name,
@@ -1084,6 +1175,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         items: saleItems,
         totalProfit: calculatedProfit
       };
+
+      await addActivityLog("sale_created", currentUser.email, `Created sale with Invoice No ${invoiceNo} (Amount: ৳${params.totalAmount})`);
+
+      return resultSale;
     } catch (error) {
       console.log("createSale Failed", error);
       console.error("Error creating sale:", error);
@@ -1151,6 +1246,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updatedAt: nowStr
       });
 
+      await addActivityLog("sale_edited", currentUser.email, `Edited sale ${id} (Invoice No: ${oldSale.invoiceNo})`);
+
       return true;
     } catch (error) {
       console.error("Error editing sale:", error);
@@ -1161,12 +1258,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteSale = async (id: string): Promise<boolean> => {
     try {
+      let deletedInvoiceNo = '';
       await runTransaction(db, async (transaction) => {
         const saleRef = doc(db, 'sales', id);
         const saleSnap = await transaction.get(saleRef);
         if (!saleSnap.exists()) throw new Error("Sale not found");
         
         const saleData = saleSnap.data() as Sale;
+        deletedInvoiceNo = saleData.invoiceNo || '';
         const nowStr = new Date().toISOString();
         const items = saleData.items || [];
         
@@ -1234,6 +1333,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         transaction.delete(doc(db, 'invoices', `inv-${id}`));
       });
       
+      await addActivityLog("sale_deleted", currentUser.email, `Deleted sale with Invoice No ${deletedInvoiceNo}`);
+
       return true;
     } catch (error) {
       console.error("Error deleting sale:", error);
@@ -1375,55 +1476,143 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const login = async (email: string, password: string, rememberMe: boolean) => {
     const normalizedEmail = email.trim().toLowerCase();
     
-    // Default to standard Firebase Auth Signin FIRST - avoids any unauthenticated reads from Firestore 'users' collection
-    const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
-    const authUser = userCredential.user;
+    // Check Lockout Status
+    const lockoutKey = `sky_lockout_${normalizedEmail}`;
+    const attemptsKey = `sky_attempts_${normalizedEmail}`;
+    const lockedUntilStr = localStorage.getItem(lockoutKey);
     
-    // Retrieve additional user data parameters from our Firestore database
-    const userDocRef = doc(db, 'users', authUser.uid);
-    const userDocSnap = await getDoc(userDocRef);
-    
-    if (userDocSnap.exists()) {
-      const userData = userDocSnap.data();
-      if (userData.status === 'inactive') {
+    if (lockedUntilStr) {
+      const lockedUntil = Number(lockedUntilStr);
+      if (Date.now() < lockedUntil) {
+        const remainingMinutes = Math.ceil((lockedUntil - Date.now()) / 1000 / 60);
+        throw new Error(`ACCOUNT_LOCKED: This account is temporarily locked due to repeated sign-in failures. Please try again in ${remainingMinutes} minute(s).`);
+      } else {
+        localStorage.removeItem(lockoutKey);
+        localStorage.removeItem(attemptsKey);
+      }
+    }
+
+    try {
+      // 1. Enforce Explicit Session Persistence Configuration
+      await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
+
+      // 2. Default to standard Firebase Auth Signin FIRST
+      const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+      const authUser = userCredential.user;
+      
+      // 3. Email Verification Check Gate
+      if (!authUser.emailVerified) {
+        try {
+          await sendEmailVerification(authUser);
+        } catch (err) {
+          console.error("Error sending verification email on login:", err);
+        }
         await signOut(auth);
-        throw new Error('Your enterprise account is inactive. Please complete your registration via OTP verification.');
+        throw new Error('EMAIL_NOT_VERIFIED: Your business email must be verified before signing in. A fresh verification link has been sent to your email.');
       }
       
-      const mappedRole: UserRole = userData.role === 'superAdmin' ? 'Super Admin' : userData.role === 'admin' ? 'Admin' : 'Staff';
-      const matchedUser = {
-        name: userData.name || authUser.displayName || 'Enterprise Operator',
-        email: normalizedEmail,
-        role: mappedRole,
-        avatar: userData.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(userData.name || 'Operator')}`
-      };
+      // Reset attempts on successful sign-in
+      localStorage.removeItem(attemptsKey);
+      localStorage.removeItem(lockoutKey);
+
+      // Log success in Activity Logs
+      await addActivityLog("login_success", normalizedEmail, "Successful sign-in");
+
+      // Retrieve additional user data parameters from our Firestore database
+      const userDocRef = doc(db, 'users', authUser.uid);
+      let userDocSnap = await getDoc(userDocRef);
+      let userData: any = null;
+
+      if (userDocSnap.exists()) {
+        userData = userDocSnap.data();
+      } else {
+        // Fallback: search users collection by email
+        try {
+          const usersRef = collection(db, 'users');
+          const q = query(usersRef, where('email', '==', normalizedEmail));
+          const querySnap = await getDocs(q);
+          if (!querySnap.empty) {
+            userData = querySnap.docs[0].data();
+            // Migrate user profile under their actual Firebase uid
+            const migratedDoc = {
+              ...userData,
+              id: authUser.uid,
+              updatedAt: new Date().toISOString()
+            };
+            await setDoc(doc(db, 'users', authUser.uid), migratedDoc);
+          }
+        } catch (err) {
+          console.error("Error searching user by email in login:", err);
+        }
+      }
       
-      setCurrentUser(matchedUser);
-      setAuthenticatedRole(matchedUser.role);
-      setIsAuthenticated(true);
-      
-      if (rememberMe) {
+      if (userData) {
+        if (userData.status === 'inactive') {
+          await signOut(auth);
+          throw new Error('Your enterprise account is inactive. Please complete your registration via OTP verification.');
+        }
+        
+        if (userData.status === 'blocked') {
+          await signOut(auth);
+          throw new Error('Your account has been blocked due to security policies. Please contact your Super Admin.');
+        }
+        
+        const roleStr = String(userData.role || '').toLowerCase().replace(/[^a-z]/g, '');
+        const mappedRole: UserRole = roleStr === 'superadmin' ? 'Super Admin' : roleStr === 'admin' ? 'Admin' : 'Staff';
+        const matchedUser = {
+          name: userData.name || authUser.displayName || 'Enterprise Operator',
+          email: normalizedEmail,
+          role: mappedRole,
+          avatar: userData.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(userData.name || 'Operator')}`
+        };
+        
+        setCurrentUser(matchedUser);
+        setAuthenticatedRole(matchedUser.role);
+        setIsAuthenticated(true);
+        
         localStorage.setItem('sky_v2_session_active', 'true');
         localStorage.setItem('sky_v2_user', JSON.stringify(matchedUser));
         localStorage.setItem('sky_v2_auth_role', matchedUser.role);
       } else {
+        // Build dummy mapping if none exists yet
+        const mappedRole: UserRole = 'Staff';
+        const matchedUser = {
+          name: authUser.email?.split('@')[0] || 'Enterprise Operator',
+          email: normalizedEmail,
+          role: mappedRole,
+          avatar: `https://api.dicebear.com/7.x/initials/svg?seed=Operator`
+        };
+        setCurrentUser(matchedUser);
+        setAuthenticatedRole(mappedRole);
+        setIsAuthenticated(true);
         localStorage.setItem('sky_v2_session_active', 'true');
         localStorage.setItem('sky_v2_user', JSON.stringify(matchedUser));
-        localStorage.setItem('sky_v2_auth_role', matchedUser.role);
+        localStorage.setItem('sky_v2_auth_role', mappedRole);
       }
-    } else {
-      // Build dummy mapping if none exists yet
-      const mappedRole: UserRole = 'Staff';
-      const matchedUser = {
-        name: authUser.email?.split('@')[0] || 'Enterprise Operator',
-        email: normalizedEmail,
-        role: mappedRole,
-        avatar: `https://api.dicebear.com/7.x/initials/svg?seed=Operator`
-      };
-      setCurrentUser(matchedUser);
-      setAuthenticatedRole(mappedRole);
-      setIsAuthenticated(true);
-      localStorage.setItem('sky_v2_session_active', 'true');
+    } catch (error: any) {
+      if (error.message && (error.message.includes("EMAIL_NOT_VERIFIED") || error.message.includes("ACCOUNT_LOCKED"))) {
+        throw error;
+      }
+      
+      // Track failed attempts
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+        const currentAttempts = Number(localStorage.getItem(attemptsKey) || 0) + 1;
+        localStorage.setItem(attemptsKey, currentAttempts.toString());
+        
+        // Log failure in Activity Logs
+        await addActivityLog("login_failure", normalizedEmail, `Failed sign-in attempt (${currentAttempts}/5)`);
+
+        if (currentAttempts >= 5) {
+          const lockTime = Date.now() + 15 * 60 * 1000; // 15 mins lock
+          localStorage.setItem(lockoutKey, lockTime.toString());
+          await addActivityLog("account_locked", normalizedEmail, "Account locked due to 5 consecutive failures");
+          throw new Error('ACCOUNT_LOCKED: Too many failed sign-in attempts. This account is locked for 15 minutes.');
+        } else {
+          throw new Error(`Authentication failed. Incorrect email or password. (${5 - currentAttempts} attempt(s) remaining)`);
+        }
+      }
+      
+      throw error;
     }
   };
 
@@ -1439,6 +1628,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let userCredential;
     try {
       userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
+      await sendEmailVerification(userCredential.user);
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {
         throw new Error('An enterprise account with this email address already exists.');
@@ -1641,7 +1831,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       sendResetOTP,
       verifyOTP,
       completeOTPRegistration,
-      completeOTPPasswordReset
+      completeOTPPasswordReset,
+      addActivityLog
     }}>
       {children}
     </AppContext.Provider>

@@ -17,6 +17,8 @@ import {
 export const Users: React.FC = () => {
   const { currentUser, setCurrentUserRole, users, addUser, loading } = useApp();
 
+  const isAuthorized = currentUser && (currentUser.role === 'Super Admin' || currentUser.role === 'Admin');
+
   // Form State
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -25,6 +27,23 @@ export const Users: React.FC = () => {
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [isAdding, setIsAdding] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+
+  if (!isAuthorized) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 text-center bg-white border border-slate-100 rounded-2xl max-w-lg mx-auto shadow-sm my-12 font-sans">
+        <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center text-rose-600 mb-4 ring-8 ring-rose-50/50">
+          <UsersIcon className="w-8 h-8 opacity-75" />
+        </div>
+        <h3 className="text-sm font-black text-slate-900 tracking-tight uppercase">Access Denied</h3>
+        <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+          Standard Staff operators do not have permissions to view or manage system users.
+        </p>
+        <p className="text-[10px] text-slate-400 font-mono mt-4 uppercase tracking-widest bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
+          Role Required: Admin or Super Admin
+        </p>
+      </div>
+    );
+  }
 
   const getRoleStyle = (userRole: UserRole) => {
     switch (userRole) {

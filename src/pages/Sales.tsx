@@ -1711,50 +1711,58 @@ export const Sales: React.FC = () => {
                           <span>View</span>
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingSale(s);
-                            setEditFormGroup({
-                              customerName: s.customerName,
-                              customerPhone: s.customerPhone || '',
-                              customerAddress: s.customerAddress || '',
-                              brand: s.brand || 'Sky Automation Tech',
-                              platform: s.platform || 'Facebook',
-                              courier: s.courier || 'Steadfast',
-                              trackingId: s.trackingId || '',
-                              paymentMethod: s.paymentMethod || 'Cash',
-                              paymentStatus: s.paymentStatus || 'Paid',
-                              amountPaid: s.amountPaid !== undefined ? s.amountPaid : s.totalAmount,
-                              notes: s.notes || ''
-                            });
-                            setIsEditingModalOpen(true);
-                          }}
-                          className="text-[11px] text-amber-600 hover:text-amber-700 font-bold underline flex items-center gap-1 cursor-pointer"
-                          title="Edit Customer Info / Logistics"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                          <span>Edit</span>
-                        </button>
+                        {(currentUser.role === 'Super Admin' || currentUser.role === 'Admin') && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingSale(s);
+                              setEditFormGroup({
+                                customerName: s.customerName,
+                                customerPhone: s.customerPhone || '',
+                                customerAddress: s.customerAddress || '',
+                                brand: s.brand || 'Sky Automation Tech',
+                                platform: s.platform || 'Facebook',
+                                courier: s.courier || 'Steadfast',
+                                trackingId: s.trackingId || '',
+                                paymentMethod: s.paymentMethod || 'Cash',
+                                paymentStatus: s.paymentStatus || 'Paid',
+                                amountPaid: s.amountPaid !== undefined ? s.amountPaid : s.totalAmount,
+                                notes: s.notes || ''
+                              });
+                              setIsEditingModalOpen(true);
+                            }}
+                            className="text-[11px] text-amber-600 hover:text-amber-700 font-bold underline flex items-center gap-1 cursor-pointer"
+                            title="Edit Customer Info / Logistics"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                            <span>Edit</span>
+                          </button>
+                        )}
 
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (window.confirm(`Are you absolutely sure you want to delete invoice ${s.invoiceNo}? This will restore its products' original stock levels!`)) {
-                              const success = await deleteSale(s.id);
-                              if (success) {
-                                alert(`Invoice ${s.invoiceNo} has been successfully deleted and inventory quantities have been reverted.`);
-                              } else {
-                                alert(`Error deleting invoice document.`);
+                        {currentUser.role === 'Super Admin' && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (window.confirm(`Are you absolutely sure you want to delete invoice ${s.invoiceNo}? This will restore its products' original stock levels!`)) {
+                                const success = await deleteSale(s.id);
+                                if (success) {
+                                  alert(`Invoice ${s.invoiceNo} has been successfully deleted and inventory quantities have been reverted.`);
+                                } else {
+                                  alert(`Error deleting invoice document.`);
+                                }
                               }
-                            }
-                          }}
-                          className="text-[11px] text-rose-600 hover:text-rose-700 font-bold underline flex items-center gap-1 cursor-pointer"
-                          title="Purge Invoice & Revert Stocks"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Delete</span>
-                        </button>
+                            }}
+                            className="text-[11px] text-rose-600 hover:text-rose-700 font-bold underline flex items-center gap-1 cursor-pointer"
+                            title="Purge Invoice & Revert Stocks"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete</span>
+                          </button>
+                        )}
+
+                        {currentUser.role !== 'Super Admin' && currentUser.role !== 'Admin' && (
+                          <span className="text-[10px] font-mono text-slate-400">READ-ONLY</span>
+                        )}
                       </div>
                     </td>
                   </tr>

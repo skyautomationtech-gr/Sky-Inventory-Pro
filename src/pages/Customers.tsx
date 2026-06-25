@@ -128,6 +128,28 @@ export const Customers: React.FC = () => {
     const phoneDupQuery = query(collection(db, 'loyalty_customers'), where('phone', '==', phone));
     const dupSnapshot = await getDocs(phoneDupQuery);
 
+    // Duplicate email prevention if email is provided
+    if (email) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setErrorMsg('Please enter a valid email address.');
+        return;
+      }
+      const emailDupQuery = query(collection(db, 'loyalty_customers'), where('email', '==', email));
+      const emailDupSnapshot = await getDocs(emailDupQuery);
+
+      if (editingCustomer) {
+        if (!emailDupSnapshot.empty && emailDupSnapshot.docs[0].id !== editingCustomer.id) {
+          setErrorMsg('Another client is already registered under this email address.');
+          return;
+        }
+      } else {
+        if (!emailDupSnapshot.empty) {
+          setErrorMsg('A client is already registered under this email address.');
+          return;
+        }
+      }
+    }
+
     if (editingCustomer) {
       // Editing Mode
       if (!dupSnapshot.empty && dupSnapshot.docs[0].id !== editingCustomer.id) {

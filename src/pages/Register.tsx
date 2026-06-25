@@ -103,7 +103,30 @@ export const Register: React.FC = () => {
   }, [password]);
 
   const validateEmail = (val: string) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
+    const emailStr = val.trim().toLowerCase();
+    // 1. Basic format regex check (at least 2 character TLD)
+    const basicRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!basicRegex.test(emailStr)) {
+      return { valid: false, message: 'Please enter a valid email format (e.g., name@domain.com).' };
+    }
+
+    // 2. Block typical disposable/fake/temporary email domains
+    const disposableDomains = [
+      'mailinator.com', '10minutemail.com', 'tempmail.com', 'dispostable.com', 
+      'yopmail.com', 'trashmail.com', 'guerrillamail.com', 'getairmail.com', 
+      'sharklasers.com', 'guerrillamailblock.com', 'guerrillamail.net', 
+      'guerrillamail.org', 'guerrillamail.biz', 'fakeinbox.com', 'mintemail.com', 
+      'mailnesia.com', 'maildrop.cc', 'disposable.com', 'temp-mail.org',
+      'yopmail.fr', 'yopmail.net', 'cool.fr.nf', 'jetable.org', 'dispostable.com',
+      'tempmailaddress.com', 'disposablemail.com', 'fakeemail.com'
+    ];
+
+    const domain = emailStr.split('@')[1];
+    if (disposableDomains.includes(domain)) {
+      return { valid: false, message: 'Disposable or temporary email domains are not allowed. Please use a real email.' };
+    }
+
+    return { valid: true, message: '' };
   };
 
   // Step 1: Submit Form & Trigger OTP Dispatch
@@ -119,8 +142,10 @@ export const Register: React.FC = () => {
       setErrorMsg('Business Name / Storefront Entity is required.');
       return;
     }
-    if (!email.trim() || !validateEmail(email)) {
-      setErrorMsg('A valid business email address is required.');
+    
+    const emailCheck = validateEmail(email);
+    if (!email.trim() || !emailCheck.valid) {
+      setErrorMsg(emailCheck.message || 'A valid email address is required.');
       return;
     }
     if (password.length < 6) {

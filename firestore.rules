@@ -8,7 +8,7 @@ service cloud.firestore {
 
     // 2. Core Authentication and Role Helpers
     function isSignedIn() {
-      return request.auth != null;
+      return request.auth != null && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
 
     function incoming() {
@@ -199,6 +199,12 @@ service cloud.firestore {
     match /loyalty_transactions/{id} {
       allow read: if isSignedIn();
       allow write: if isSignedIn() && isValidId(id);
+    }
+
+    match /activity_logs/{id} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if false;
     }
 
     // OTP Document Security matches
