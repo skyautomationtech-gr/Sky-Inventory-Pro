@@ -936,54 +936,81 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         let totalProfit = 0;
         saleItems.length = 0; // Clear array in case of retry
 
-        // Process inventory updates
+        // STEP 1: Read all products first
+        const productSnapshots: { item: any; ref: any; data: any; exists: boolean }[] = [];
         for (const item of params.items) {
           const prodRef = doc(db, 'products', item.productId);
           const prodSnap = await transaction.get(prodRef);
-          if (!prodSnap.exists()) throw new Error(`Product ${item.productId} not found`);
-          
-          const prodData = prodSnap.data();
-          if ((prodData.stockQuantity || 0) < item.quantity) {
+          productSnapshots.push({
+            item,
+            ref: prodRef,
+            data: prodSnap.exists() ? prodSnap.data() : null,
+            exists: prodSnap.exists()
+          });
+        }
+
+        // STEP 2: Validate stock and prepare update details
+        const updatesAndLogs: {
+          ref: any;
+          newStock: number;
+          logId: string;
+          logData: any;
+        }[] = [];
+
+        for (const snap of productSnapshots) {
+          if (!snap.exists) {
+            throw new Error(`Product ${snap.item.productId} not found`);
+          }
+          const prodData = snap.data;
+          if ((prodData.stockQuantity || 0) < snap.item.quantity) {
             throw new Error(`Insufficient stock for product ${prodData.name}`);
           }
           
-          const newStock = prodData.stockQuantity - item.quantity;
-          const lineItemProfit = (prodData.sellingPrice - prodData.purchasePrice) * item.quantity;
+          const newStock = prodData.stockQuantity - snap.item.quantity;
+          const lineItemProfit = (prodData.sellingPrice - prodData.purchasePrice) * snap.item.quantity;
           totalProfit += lineItemProfit;
           
           saleItems.push({
-            productId: item.productId,
+            productId: snap.item.productId,
             productName: prodData.name,
             sku: prodData.sku,
-            quantity: item.quantity,
+            quantity: snap.item.quantity,
             purchasePrice: prodData.purchasePrice,
             sellingPrice: prodData.sellingPrice
           });
-          
-          transaction.update(prodRef, {
-            stockQuantity: newStock,
-            updatedAt: nowStr
-          });
-          
-          const logId = `l-sale-${Date.now()}-${Math.random().toString(36).substring(2, 6)}-${item.productId}`;
-          transaction.set(doc(db, 'inventoryLogs', logId), {
-            id: logId,
-            productId: item.productId,
-            productName: prodData.name,
-            sku: prodData.sku || '',
-            type: 'stockOut',
-            quantity: item.quantity,
-            previousStock: prodData.stockQuantity,
-            newStock: newStock,
-            note: `Automated Stock Out for Sale`,
-            createdBy: currentUser.name,
-            createdAt: nowStr
+
+          const logId = `l-sale-${Date.now()}-${Math.random().toString(36).substring(2, 6)}-${snap.item.productId}`;
+          updatesAndLogs.push({
+            ref: snap.ref,
+            newStock,
+            logId,
+            logData: {
+              id: logId,
+              productId: snap.item.productId,
+              productName: prodData.name,
+              sku: prodData.sku || '',
+              type: 'stockOut',
+              quantity: snap.item.quantity,
+              previousStock: prodData.stockQuantity,
+              newStock: newStock,
+              note: `Automated Stock Out for Sale`,
+              createdBy: currentUser.name,
+              createdAt: nowStr
+            }
           });
         }
         
         calculatedProfit = totalProfit;
 
-        // 2. Write Sale with populated items
+        // STEP 3: Update inventory (writes)
+        for (const u of updatesAndLogs) {
+          transaction.update(u.ref, {
+            stockQuantity: u.newStock,
+            updatedAt: nowStr
+          });
+        }
+
+        // STEP 4: Create sale document (write)
         transaction.set(doc(db, 'sales', saleId), {
           id: saleId,
           invoiceNo: computedInvoiceNo,
@@ -1010,7 +1037,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           createdAt: nowStr
         });
         
-        // 3. Write Invoice
+        // Create Invoice
         transaction.set(doc(db, 'invoices', `inv-${saleId}`), {
           id: `inv-${saleId}`,
           invoiceNo: computedInvoiceNo,
@@ -1023,6 +1050,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           paymentMethod: params.paymentMethod,
           createdAt: nowStr
         });
+
+        // STEP 5: Create inventory logs (writes)
+        for (const u of updatesAndLogs) {
+          transaction.set(doc(db, 'inventoryLogs', u.logId), u.logData);
+        }
         
         return computedInvoiceNo;
       });
@@ -1138,38 +1170,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const nowStr = new Date().toISOString();
         const items = saleData.items || [];
         
-        // Restore stock
+        // STEP 1: Read all products first
+        const productSnapshots: { item: any; ref: any; data: any; exists: boolean }[] = [];
         for (const item of items) {
           const prodRef = doc(db, 'products', item.productId);
           const prodSnap = await transaction.get(prodRef);
-          if (prodSnap.exists()) {
-            const prodData = prodSnap.data();
+          productSnapshots.push({
+            item,
+            ref: prodRef,
+            data: prodSnap.exists() ? prodSnap.data() : null,
+            exists: prodSnap.exists()
+          });
+        }
+        
+        // STEP 2: Compute reverted stocks and prepare write details
+        const updatesAndLogs: {
+          ref: any;
+          revertedStock: number;
+          logId: string;
+          logData: any;
+        }[] = [];
+        
+        for (const snap of productSnapshots) {
+          if (snap.exists) {
+            const prodData = snap.data;
             const currentStock = prodData.stockQuantity || 0;
-            const revertedStock = currentStock + Number(item.quantity);
+            const revertedStock = currentStock + Number(snap.item.quantity);
+            const logId = `l-sale-revert-${Date.now()}-${Math.random().toString(36).substring(2, 6)}-${snap.item.productId}`;
             
-            transaction.update(prodRef, {
-              stockQuantity: revertedStock,
-              updatedAt: nowStr
-            });
-            
-            const logId = `l-sale-revert-${Date.now()}-${Math.random().toString(36).substring(2, 6)}-${item.productId}`;
-            transaction.set(doc(db, 'inventoryLogs', logId), {
-              id: logId,
-              productId: item.productId,
-              productName: item.productName,
-              sku: item.sku || '',
-              type: 'stockIn',
-              quantity: item.quantity,
-              previousStock: currentStock,
-              newStock: revertedStock,
-              note: `Reverted Stock In due to deletion of invoice ${saleData.invoiceNo || ''}`,
-              createdBy: currentUser.name,
-              createdAt: nowStr
+            updatesAndLogs.push({
+              ref: snap.ref,
+              revertedStock,
+              logId,
+              logData: {
+                id: logId,
+                productId: snap.item.productId,
+                productName: snap.item.productName,
+                sku: snap.item.sku || '',
+                type: 'stockIn',
+                quantity: snap.item.quantity,
+                previousStock: currentStock,
+                newStock: revertedStock,
+                note: `Reverted Stock In due to deletion of invoice ${saleData.invoiceNo || ''}`,
+                createdBy: currentUser.name,
+                createdAt: nowStr
+              }
             });
           }
         }
         
-        // Delete sale and invoice
+        // STEP 3: Execute all updates and sets (writes)
+        for (const u of updatesAndLogs) {
+          transaction.update(u.ref, {
+            stockQuantity: u.revertedStock,
+            updatedAt: nowStr
+          });
+          
+          transaction.set(doc(db, 'inventoryLogs', u.logId), u.logData);
+        }
+        
+        // STEP 4: Delete sale and invoice
         transaction.delete(saleRef);
         transaction.delete(doc(db, 'invoices', `inv-${id}`));
       });
