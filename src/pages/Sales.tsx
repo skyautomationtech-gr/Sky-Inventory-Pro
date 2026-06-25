@@ -703,28 +703,14 @@ export const Sales: React.FC = () => {
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
-        format: 'a4'
+        format: 'a5'
       });
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
       
-      const imgWidth = 210; // A4 Standard
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
-
-      // Wrap if overflow
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
-      }
+      // Draw image to fill the exact dimensions of single A5 page
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
 
       pdf.save(filename);
     } catch (err) {
@@ -777,7 +763,7 @@ export const Sales: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold font-display tracking-tight text-[#090d16]">Invoice-Based Sales System</h2>
           <p className="text-xs text-slate-500 mt-1 font-medium">
-            Formulate multi-product orders, route package dispatch logistics, verify banking transaction registers, and produce high-clarity A4 PDF client receipts.
+            Formulate multi-product orders, route package dispatch logistics, verify banking transaction registers, and produce high-clarity A5 PDF client receipts.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1378,7 +1364,7 @@ export const Sales: React.FC = () => {
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-mono font-black text-slate-750 uppercase tracking-widest flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-              <span>A4 LIVE UPDATE PREVIEW</span>
+              <span>A5 LIVE UPDATE PREVIEW</span>
             </span>
             <div className="flex items-center gap-1.5">
               <button
@@ -1392,15 +1378,15 @@ export const Sales: React.FC = () => {
               </button>
             </div>
           </div>
-              {/* Actual live document block styled to match A4 aspects perfectly */}
+              {/* Actual live document block styled to match A5 aspects perfectly */}
           <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 shadow-sm overflow-x-auto select-none">
             <div 
               id="live-invoice-pdf-container" 
-              className="bg-white text-black shadow-xl pt-6 pb-11 px-10 mx-auto flex flex-col justify-between border-4 border-black rounded-none relative overflow-hidden"
-              style={{ width: '794px', height: '1123px', minHeight: '1123px', maxHeight: '1123px', backgroundColor: '#ffffff', color: '#000000', fontFamily: "'Inter', 'Poppins', sans-serif" }}
+              className="bg-white text-black shadow-xl pt-4 pb-4 px-6 mx-auto flex flex-col justify-between border-4 border-black rounded-none relative overflow-hidden"
+              style={{ width: '559px', height: '794px', minHeight: '794px', maxHeight: '794px', backgroundColor: '#ffffff', color: '#000000', fontFamily: "'Inter', 'Poppins', sans-serif" }}
             >
               
-              <div className="flex flex-col justify-between h-full space-y-2">
+              <div className="flex flex-col justify-between h-full space-y-1.5">
                 
                 {/* TOP HEADER */}
                 <div className="flex justify-between items-start">
@@ -1409,21 +1395,21 @@ export const Sales: React.FC = () => {
                       <img 
                         src={activeBrandSpec.logo as string} 
                         alt={activeBrandSpec.name} 
-                        className="w-18 h-18 object-contain mb-1.5" 
+                        className="w-12 h-12 object-contain mb-0.5" 
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className="w-14 h-14 bg-black text-white rounded-none flex items-center justify-center text-lg font-bold mb-1.5 uppercase tracking-wider">
+                      <div className="w-10 h-10 bg-black text-white rounded-none flex items-center justify-center text-sm font-bold mb-0.5 uppercase tracking-wider">
                         {activeBrandSpec.initials || 'SAT'}
                       </div>
                     )}
-                    <h1 className="text-[26px] font-bold text-black leading-tight">
+                    <h1 className="text-[18px] font-bold text-black leading-tight">
                       {activeBrandSpec.name}
                     </h1>
-                    <p className="text-[12px] tracking-wider text-black font-bold uppercase mt-0.5">
+                    <p className="text-[10px] tracking-wider text-black font-bold uppercase mt-0.5">
                       {activeBrandSpec.tagline}
                     </p>
-                    <div className="text-[12px] text-black font-bold mt-2.5 space-y-0.5">
+                    <div className="text-[9.5px] text-black font-bold mt-1.5 space-y-0">
                       <p>📍 {activeBrandSpec.address}</p>
                       <p>📞 {activeBrandSpec.phone}</p>
                       <p>✉️ {activeBrandSpec.email}</p>
@@ -1431,32 +1417,32 @@ export const Sales: React.FC = () => {
                   </div>
 
                   <div className="text-right flex flex-col items-end">
-                    <h2 className="text-[22px] font-extrabold tracking-widest text-black uppercase mb-1 leading-none select-none">
+                    <h2 className="text-[16px] font-extrabold tracking-widest text-black uppercase mb-0.5 leading-none select-none">
                       INVOICE
                     </h2>
-                    <div className="text-[12px] text-black space-y-1 mt-2.5 text-right font-bold">
-                      <p><span>Invoice No:</span> <span className="font-extrabold text-[14px] underline decoration-2 font-mono">{dynamicInvoiceNo}</span></p>
+                    <div className="text-[9.5px] text-black space-y-0.5 mt-1.5 text-right font-bold">
+                      <p><span>Invoice No:</span> <span className="font-extrabold text-[11px] underline decoration-2 font-mono">{dynamicInvoiceNo}</span></p>
                       <p><span>Date:</span> <span className="font-bold">{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span></p>
-                      <div className="inline-block bg-black text-white px-2.5 py-0.5 font-extrabold text-[12px] uppercase tracking-wider rounded-none mt-1 shadow-sm">
+                      <div className="inline-block bg-black text-white px-2 py-0.5 font-extrabold text-[9.5px] uppercase tracking-wider rounded-none mt-0.5 shadow-sm">
                         STATUS: {finalPaymentStatus}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="border-b-2 border-black" />
+                <div className="border-b border-black" />
 
                 {/* 2. CUSTOMER & LOGISTICS INFO BLOCK */}
-                <div className="grid grid-cols-2 gap-6 text-[12.5px] pt-1">
+                <div className="grid grid-cols-2 gap-3 text-[10.5px] pt-0.5">
                   
                   {/* Bill To */}
                   <div>
-                    <h3 className="text-[14px] font-bold uppercase tracking-wider text-black mb-1 border-b-2 border-black pb-0.5">BILL TO</h3>
-                    <p className="font-bold text-black text-[13.5px] uppercase tracking-wide leading-relaxed">
+                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-black mb-0.5 border-b border-black pb-0.5">BILL TO</h3>
+                    <p className="font-bold text-black text-[11.5px] uppercase tracking-wide leading-tight">
                       {customerName.trim() || 'Valued Customer'}
                     </p>
-                    <p className="font-extrabold text-black mt-0.5 font-mono text-[12px]">Phone: {customerPhone.trim() || '—'}</p>
-                    <p className="text-black font-bold leading-normal mt-0.5 w-5/6 text-[12px]">
+                    <p className="font-extrabold text-black mt-0.5 font-mono text-[10px]">Phone: {customerPhone.trim() || '—'}</p>
+                    <p className="text-black font-bold leading-tight mt-0.5 w-5/6 text-[9.5px]">
                       {[customerHouse, customerFlat, customerRoad, customerArea, customerUnion, customerThana, customerDistrict, customerPostCode]
                         .map(p => p?.trim())
                         .filter(Boolean)
@@ -1466,14 +1452,14 @@ export const Sales: React.FC = () => {
 
                   {/* Delivery & Platform */}
                   <div className="text-right flex flex-col items-end w-full">
-                    <h3 className="text-[14px] font-bold uppercase tracking-wider text-black mb-1 border-b-2 border-black pb-0.5 w-full">DELIVERY DETAILS</h3>
-                    <div className="text-[12px] text-black space-y-1 font-bold">
+                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-black mb-0.5 border-b border-black pb-0.5 w-full">DELIVERY DETAILS</h3>
+                    <div className="text-[9.5px] text-black space-y-0.5 font-bold">
                       <p><span>Platform:</span> <span className="font-extrabold text-black">{selectedPlatform || 'General Order'}</span></p>
                       <p><span>Courier:</span> <span className="font-extrabold text-black">{selectedCourier || '—'}</span></p>
-                      <p><span>Tracking:</span> <span className="font-extrabold text-black font-mono uppercase text-[13px]">{trackingId.trim() || '—'}</span></p>
+                      <p><span>Tracking:</span> <span className="font-extrabold text-black font-mono uppercase text-[10.5px]">{trackingId.trim() || '—'}</span></p>
                       <p><span>Method:</span> <span className="font-extrabold text-black uppercase">{selectedPaymentMethod}</span></p>
                       {transactionId.trim() && (
-                        <p><span>TxID:</span> <span className="font-extrabold text-black font-mono uppercase text-[12px]">{transactionId.trim()}</span></p>
+                        <p><span>TxID:</span> <span className="font-extrabold text-black font-mono uppercase text-[10px]">{transactionId.trim()}</span></p>
                       )}
                     </div>
                   </div>
@@ -1481,16 +1467,16 @@ export const Sales: React.FC = () => {
                 </div>
 
                 {/* 3. ORDER ITEMS TABLE */}
-                <div className="flex-1 min-h-[80px] pt-0">
-                  <table className="w-full text-left text-[12.5px] border-collapse">
+                <div className="flex-1 min-h-[60px] pt-0">
+                  <table className="w-full text-left text-[10px] border-collapse">
                     <thead>
-                      <tr className="border-b-2 border-black">
-                        <th className="py-1.5 text-[13px] font-bold text-black uppercase tracking-wider w-10 text-center">#</th>
-                        <th className="py-1.5 text-[13px] font-bold text-black uppercase tracking-wider pl-2">Description</th>
-                        <th className="py-1.5 text-[13px] font-bold text-black uppercase tracking-wider text-center w-14">Qty</th>
-                        <th className="py-1.5 text-[13px] font-bold text-black uppercase tracking-wider text-center w-28">Serial #</th>
-                        <th className="py-1.5 text-[13px] font-bold text-black uppercase tracking-wider text-right w-28">Unit Price</th>
-                        <th className="py-1.5 text-[13px] font-bold text-black uppercase tracking-wider text-right w-32">Total</th>
+                      <tr className="border-b border-black">
+                        <th className="py-1 text-[10px] font-bold text-black uppercase tracking-wider w-8 text-center">#</th>
+                        <th className="py-1 text-[10px] font-bold text-black uppercase tracking-wider pl-2">Description</th>
+                        <th className="py-1 text-[10px] font-bold text-black uppercase tracking-wider text-center w-12">Qty</th>
+                        <th className="py-1 text-[10px] font-bold text-black uppercase tracking-wider text-center w-24">Serial #</th>
+                        <th className="py-1 text-[10px] font-bold text-black uppercase tracking-wider text-right w-24">Unit Price</th>
+                        <th className="py-1 text-[10px] font-bold text-black uppercase tracking-wider text-right w-28">Total</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1499,22 +1485,22 @@ export const Sales: React.FC = () => {
                         const unitPrice = targetProd ? targetProd.sellingPrice : 0;
                         const rowTotal = unitPrice * item.quantity;
                         return (
-                          <tr key={idx} className="border-b border-black last:border-b-0 text-black text-[12.5px] font-semibold">
-                            <td className="py-1.5 text-center text-black font-mono text-[12.5px]">{idx + 1}</td>
-                            <td className="py-1.5 pl-2">
-                              <p className="font-bold text-black text-[12.5px]">
+                          <tr key={idx} className="border-b border-black last:border-b-0 text-black text-[10px] font-semibold">
+                            <td className="py-1 text-center text-black font-mono text-[10px]">{idx + 1}</td>
+                            <td className="py-1 pl-2">
+                              <p className="font-bold text-black text-[10.5px]">
                                 {targetProd ? targetProd.name : '—'}
                               </p>
                               {targetProd && (
-                                <p className="text-[10.5px] text-black mt-0.5 uppercase tracking-wider font-mono font-bold">
+                                <p className="text-[9px] text-black mt-0 uppercase tracking-wider font-mono font-bold">
                                   {targetProd.sku} • {targetProd.category}
                                 </p>
                               )}
                             </td>
-                            <td className="py-1.5 text-center font-bold text-[12.5px]">{item.quantity > 0 ? item.quantity : ' '}</td>
-                            <td className="py-1.5 text-center text-black font-mono text-[10.5px] font-bold">{item.serialNumber || '—'}</td>
-                            <td className="py-1.5 text-right font-mono text-[12.5px]">{formatBDTCurrency(unitPrice)}</td>
-                            <td className="py-1.5 text-right font-mono font-bold text-black text-[12.5px]">{formatBDTCurrency(rowTotal)}</td>
+                            <td className="py-1 text-center font-bold text-[10px]">{item.quantity > 0 ? item.quantity : ' '}</td>
+                            <td className="py-1 text-center text-black font-mono text-[9px] font-bold">{item.serialNumber || '—'}</td>
+                            <td className="py-1 text-right font-mono text-[10px]">{formatBDTCurrency(unitPrice)}</td>
+                            <td className="py-1 text-right font-mono font-bold text-black text-[10px]">{formatBDTCurrency(rowTotal)}</td>
                           </tr>
                         );
                       })}
@@ -1523,8 +1509,8 @@ export const Sales: React.FC = () => {
                 </div>
 
                 {/* 4. TOTALS & SUMMARY SECTION */}
-                <div className="flex justify-end pt-2 border-t-2 border-black">
-                  <div className="w-1/2 md:w-2/5 space-y-0.5 text-[13px] text-black font-bold">
+                <div className="flex justify-end pt-1 border-t border-black">
+                  <div className="w-[190px] space-y-0.5 text-[10px] text-black font-bold">
                     <div className="flex justify-between">
                       <span>Subtotal</span>
                       <span className="font-mono text-black">{computedSubtotal > 0 ? formatBDTCurrency(computedSubtotal) : ' '}</span>
@@ -1537,46 +1523,44 @@ export const Sales: React.FC = () => {
                       <span>Delivery Charge</span>
                       <span className="font-mono">{parsedDelivery > 0 ? `+ ${formatBDTCurrency(parsedDelivery)}` : ' '}</span>
                     </div>
-                    <div className="flex justify-between border-t-2 border-black pt-1.5 pb-0.5">
-                      <span className="font-extrabold text-[#000000] text-[14.5px] uppercase">Grand Total</span>
-                      <span className="font-mono text-[18px] font-extrabold text-black">{grandTotal > 0 ? formatBDTCurrency(grandTotal) : ' '}</span>
+                    <div className="flex justify-between border-t border-black pt-1 pb-0.5">
+                      <span className="font-extrabold text-[#000000] text-[11px] uppercase">Grand Total</span>
+                      <span className="font-mono text-[13px] font-extrabold text-black">{grandTotal > 0 ? formatBDTCurrency(grandTotal) : ' '}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Amount Paid</span>
                       <span className="font-mono text-black">{parsedAmountPaid > 0 ? formatBDTCurrency(parsedAmountPaid) : ' '}</span>
                     </div>
-                    <div className="flex justify-between text-black font-extrabold border-t-2 border-black pt-1.5">
+                    <div className="flex justify-between text-black font-extrabold border-t border-black pt-1">
                       <span>Due Amount</span>
-                      <span className="font-mono text-[14px]">{(grandTotal - parsedAmountPaid) > 0 ? formatBDTCurrency(grandTotal - parsedAmountPaid) : ' '}</span>
+                      <span className="font-mono text-[11px]">{(grandTotal - parsedAmountPaid) > 0 ? formatBDTCurrency(grandTotal - parsedAmountPaid) : ' '}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* 5. NOTES, TERMS, WARRANTY & SIGNATURE */}
-                <div className="grid grid-cols-2 gap-4 pt-2.5 border-t-2 border-black text-[12.5px] text-black">
+                <div className="grid grid-cols-2 gap-3 pt-1.5 border-t border-black text-[10px] text-black">
                   
                   {/* Left Column: Notes & Warranty */}
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <div>
-                      <h4 className="text-[14px] font-bold uppercase tracking-wide text-black mb-0.5">Notes</h4>
-                      <p className="text-black font-semibold whitespace-pre-wrap leading-snug text-[12px]">
+                      <h4 className="text-[11px] font-bold uppercase tracking-wide text-black mb-0.5">Notes</h4>
+                      <p className="text-black font-semibold whitespace-pre-wrap leading-tight text-[9.5px]">
                         {orderNotes.trim() || 'পণ্য গ্রহণের পর সমস্যা হলে ৩ দিনের মধ্যে জানান। ধন্যবাদ।'}
                       </p>
                     </div>
                     <div>
-                      <h4 className="text-[14px] font-bold uppercase tracking-wide text-black mb-0.5">Warranty Terms & Conditions</h4>
-                      <ul className="list-decimal pl-4 text-black space-y-0.5 leading-snug text-[9.5px] font-semibold">
-                        <li>ওয়ারেন্টি শুধুমাত্র উৎপাদনজনিত (Manufacturing Defect) ত্রুটির ক্ষেত্রে প্রযোজ্য।</li>
-                        <li>ফিজিক্যাল ড্যামেজ, পানি প্রবেশ, আগুন, ভাঙা বা পোড়া অবস্থায় ওয়ারেন্টি প্রযোজ্য হবে না।</li>
-                        <li>ওয়ারেন্টি দাবি করার সময় মূল ইনভয়েস/রসিদ প্রদর্শন করতে হবে।</li>
-                        <li>অনুমোদনহীন মেরামত বা খোলা হলে ওয়ারেন্টি বাতিল বলে গণ্য হবে।</li>
-                        <li>ওয়ারেন্টি সেবা কোম্পানির নীতিমালা ও শর্তাবলী অনুযায়ী প্রদান করা হবে.</li>
+                      <h4 className="text-[11px] font-bold uppercase tracking-wide text-black mb-0.5">Warranty Terms</h4>
+                      <ul className="list-decimal pl-3 text-black space-y-0 leading-tight text-[8px] font-semibold">
+                        <li>ওয়ারেন্টি শুধুমাত্র উৎপাদনজনিত ত্রুটির ক্ষেত্রে প্রযোজ্য।</li>
+                        <li>ফিজিক্যাল ড্যামেজ, পানি, পোড়া বা ভাঙা অবস্থায় ওয়ারেন্টি বাতিল।</li>
+                        <li>ওয়ারেন্টি দাবি করতে মূল ইনভয়েস প্রদর্শন করতে হবে।</li>
                       </ul>
                     </div>
                     {warrantyPeriod > 0 && (
-                      <div className="p-2 border border-black rounded-none">
-                        <h4 className="text-[12px] font-bold uppercase tracking-wide text-black mb-0.5">Warranty Policy</h4>
-                        <div className="grid grid-cols-2 gap-y-0.5 text-[11px] text-black font-bold">
+                      <div className="p-1 border border-black rounded-none">
+                        <h4 className="text-[9.5px] font-bold uppercase tracking-wide text-black mb-0.5">Warranty Policy</h4>
+                        <div className="grid grid-cols-2 gap-y-0 text-[8.5px] text-black font-bold">
                           <p><span>Coverage:</span> <span className="font-extrabold">{warrantyPeriod} Months</span></p>
                           <p><span>Type:</span> <span className="font-extrabold">Official Warranty</span></p>
                         </div>
@@ -1585,8 +1569,8 @@ export const Sales: React.FC = () => {
                   </div>
 
                   {/* Right Column: Signature Pad */}
-                  <div className="flex flex-col justify-end items-end h-full pb-3">
-                    <div className="w-[180px]">
+                  <div className="flex flex-col justify-end items-end h-full pb-1">
+                    <div className="w-[150px]">
                       <SignaturePad 
                         onSave={setSignatureImg} 
                         savedDataUrl={signatureImg} 
@@ -1599,18 +1583,18 @@ export const Sales: React.FC = () => {
                 </div>
 
                 {/* SOLID BLACK FOOTER STRIP IN BLACK & WHITE (White bg, light-gray border, black text) */}
-                <div className="bg-white text-black border-2 border-black p-3 rounded-none flex items-center justify-between text-[12px] font-medium font-sans select-none tracking-wide">
-                  <div className="flex items-center gap-2">
+                <div className="bg-white text-black border border-black p-1.5 rounded-none flex items-center justify-between text-[9px] font-bold font-sans select-none tracking-wide">
+                  <div className="flex items-center gap-1.5">
                     <div className="shrink-0 flex items-center justify-center">
                       {'logo' in activeBrandSpec && activeBrandSpec.logo ? (
                         <img 
                           src={activeBrandSpec.logo as string} 
                           alt={activeBrandSpec.name} 
-                          className="w-[18px] h-[18px] rounded-full object-contain bg-white p-0.5 border border-black" 
+                          className="w-[14px] h-[14px] rounded-full object-contain bg-white p-0.5 border border-black" 
                           referrerPolicy="no-referrer"
                         />
                       ) : (
-                        <svg viewBox="0 0 100 100" className="w-[18px] h-[18px] text-black">
+                        <svg viewBox="0 0 100 100" className="w-[14px] h-[14px] text-black">
                           <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="2.5" />
                           <circle cx="50" cy="50" r="30" fill="none" stroke="currentColor" strokeWidth="2" strokeDasharray="3,3" />
                           <circle cx="50" cy="50" r="14" fill="none" stroke="currentColor" strokeWidth="2.5" />
@@ -1721,7 +1705,7 @@ export const Sales: React.FC = () => {
                           type="button"
                           onClick={() => setActiveInvoice(s)}
                           className="text-[11px] text-teal-600 hover:text-teal-700 font-bold underline flex items-center gap-1 cursor-pointer"
-                          title="View formal A4 Invoice"
+                          title="View formal A5 Invoice"
                         >
                           <FileText className="w-3.5 h-3.5" />
                           <span>View</span>
@@ -1991,7 +1975,7 @@ export const Sales: React.FC = () => {
                     ) : (
                       <Download className="w-3.5 h-3.5" />
                     )}
-                    <span>Download A4 PDF</span>
+                    <span>Download A5 PDF</span>
                   </button>
 
                   <button
@@ -2019,86 +2003,86 @@ export const Sales: React.FC = () => {
               <div className="overflow-x-auto bg-slate-100 p-6 flex justify-center">
                 <div 
                   id="printable-invoice-body" 
-                  className="bg-white text-black pt-6 pb-11 px-10 flex flex-col justify-between border-4 border-black rounded-none relative overflow-hidden"
-                  style={{ width: '794px', height: '1123px', minHeight: '1123px', maxHeight: '1123px', backgroundColor: '#ffffff', color: '#000000', fontFamily: "'Inter', 'Poppins', sans-serif" }}
+                  className="bg-white text-black pt-4 pb-4 px-6 flex flex-col justify-between border-4 border-black rounded-none relative overflow-hidden"
+                  style={{ width: '559px', height: '794px', minHeight: '794px', maxHeight: '794px', backgroundColor: '#ffffff', color: '#000000', fontFamily: "'Inter', 'Poppins', sans-serif" }}
                 >
                 
                 {/* 1. Header Section */}
                 <div className="flex justify-between items-start select-none">
                   <div>
                     {invoiceBrandSpec.logo ? (
-                      <img src={invoiceBrandSpec.logo as string} alt={invoiceBrandSpec.name} className="w-18 h-18 object-contain mb-1.5" />
+                      <img src={invoiceBrandSpec.logo as string} alt={invoiceBrandSpec.name} className="w-12 h-12 object-contain mb-0.5" />
                     ) : (
-                      <div className="w-14 h-14 bg-black text-white rounded-none flex items-center justify-center text-lg font-bold mb-1.5 uppercase tracking-wider">
+                      <div className="w-10 h-10 bg-black text-white rounded-none flex items-center justify-center text-sm font-bold mb-0.5 uppercase tracking-wider">
                         SAT
                       </div>
                     )}
-                    <h1 className="text-[26px] font-bold text-black leading-tight">{invoiceBrandSpec.name}</h1>
-                    <p className="text-[12px] tracking-wider text-black font-bold uppercase mt-0.5">{invoiceBrandSpec.tagline}</p>
-                    <div className="text-[12px] text-black font-bold mt-2.5 space-y-0.5">
+                    <h1 className="text-[18px] font-bold text-black leading-tight">{invoiceBrandSpec.name}</h1>
+                    <p className="text-[10px] tracking-wider text-black font-bold uppercase mt-0.5">{invoiceBrandSpec.tagline}</p>
+                    <div className="text-[9.5px] text-black font-bold mt-1.5 space-y-0">
                       <p>📍 {invoiceBrandSpec.address}</p>
                       <p>📞 {invoiceBrandSpec.phone}</p>
                       <p>✉️ {invoiceBrandSpec.email}</p>
                     </div>
                   </div>
                   <div className="text-right flex flex-col items-end">
-                    <h2 className="text-[22px] font-extrabold tracking-widest text-black uppercase mb-1 leading-none select-none">INVOICE</h2>
-                    <div className="text-[12px] text-black space-y-1 mt-2.5 text-right font-bold">
-                      <p><span>Invoice No:</span> <span className="font-extrabold text-[14px] underline decoration-2 font-mono">{activeInvoice.invoiceNo}</span></p>
+                    <h2 className="text-[16px] font-extrabold tracking-widest text-black uppercase mb-0.5 leading-none select-none">INVOICE</h2>
+                    <div className="text-[9.5px] text-black space-y-0.5 mt-1.5 text-right font-bold">
+                      <p><span>Invoice No:</span> <span className="font-extrabold text-[11px] underline decoration-2 font-mono">{activeInvoice.invoiceNo}</span></p>
                       <p><span>Date:</span> <span className="font-bold">{new Date(activeInvoice.timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span></p>
-                      <div className="inline-block bg-black text-white px-2.5 py-0.5 font-extrabold text-[12px] uppercase tracking-wider rounded-none mt-1 shadow-sm">
+                      <div className="inline-block bg-black text-white px-2 py-0.5 font-extrabold text-[9.5px] uppercase tracking-wider rounded-none mt-0.5 shadow-sm">
                         STATUS: {activeInvoice.paymentStatus}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="border-b-2 border-black" />
+                <div className="border-b border-black" />
 
                 {/* 2. Client & Logistics */}
-                <div className="grid grid-cols-2 gap-6 text-[12.5px] pt-1">
+                <div className="grid grid-cols-2 gap-3 text-[10.5px] pt-0.5">
                   <div>
-                    <h3 className="text-[14px] font-bold uppercase tracking-wider text-black mb-1 border-b-2 border-black pb-0.5">BILL TO</h3>
-                    <p className="font-bold text-black text-[13.5px] uppercase tracking-wide leading-relaxed">{activeInvoice.customerName}</p>
-                    <p className="font-extrabold text-black mt-0.5 font-mono text-[12px]">Phone: {activeInvoice.customerPhone}</p>
-                    <p className="text-black font-bold leading-normal mt-0.5 w-5/6 text-[12px]">{activeInvoice.customerAddress}</p>
+                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-black mb-0.5 border-b border-black pb-0.5">BILL TO</h3>
+                    <p className="font-bold text-black text-[11.5px] uppercase tracking-wide leading-tight">{activeInvoice.customerName}</p>
+                    <p className="font-extrabold text-black mt-0.5 font-mono text-[10px]">Phone: {activeInvoice.customerPhone}</p>
+                    <p className="text-black font-bold leading-tight mt-0.5 w-5/6 text-[9.5px]">{activeInvoice.customerAddress}</p>
                   </div>
                   <div className="text-right flex flex-col items-end w-full">
-                    <h3 className="text-[14px] font-bold uppercase tracking-wider text-black mb-1 border-b-2 border-black pb-0.5 w-full">DELIVERY DETAILS</h3>
-                    <div className="text-[12px] text-black space-y-1 font-bold">
+                    <h3 className="text-[11px] font-bold uppercase tracking-wider text-black mb-0.5 border-b border-black pb-0.5 w-full">DELIVERY DETAILS</h3>
+                    <div className="text-[9.5px] text-black space-y-0.5 font-bold">
                       <p><span>Platform:</span> <span className="font-extrabold text-black">{activeInvoice.platform || 'General Order'}</span></p>
                       <p><span>Courier:</span> <span className="font-extrabold text-black">{activeInvoice.courier || '—'}</span></p>
-                      <p><span>Tracking:</span> <span className="font-extrabold text-black font-mono uppercase text-[13px]">{activeInvoice.trackingId || '—'}</span></p>
+                      <p><span>Tracking:</span> <span className="font-extrabold text-black font-mono uppercase text-[10.5px]">{activeInvoice.trackingId || '—'}</span></p>
                       <p><span>Method:</span> <span className="font-extrabold text-black uppercase">{activeInvoice.paymentMethod || '—'}</span></p>
                     </div>
                   </div>
                 </div>
 
                 {/* 3. Items Table */}
-                <div className="flex-1 min-h-[80px] pt-0">
-                  <table className="w-full text-left text-[12.5px] border-collapse">
+                <div className="flex-1 min-h-[60px] pt-0">
+                  <table className="w-full text-left text-[10px] border-collapse">
                     <thead>
-                      <tr className="border-b-2 border-black">
-                        <th className="py-1.5 text-[13px] font-bold text-black uppercase tracking-wider w-10 text-center">#</th>
-                        <th className="py-1.5 text-[13px] font-bold text-black uppercase tracking-wider pl-2">Description</th>
-                        <th className="py-1.5 text-[13px] font-bold text-black uppercase tracking-wider text-center w-14">Qty</th>
-                        <th className="py-1.5 text-[13px] font-bold text-black uppercase tracking-wider text-right w-28">Price</th>
-                        <th className="py-1.5 text-[13px] font-bold text-black uppercase tracking-wider text-right w-32">Amount</th>
+                      <tr className="border-b border-black">
+                        <th className="py-1 text-[10px] font-bold text-black uppercase tracking-wider w-8 text-center">#</th>
+                        <th className="py-1 text-[10px] font-bold text-black uppercase tracking-wider pl-2">Description</th>
+                        <th className="py-1 text-[10px] font-bold text-black uppercase tracking-wider text-center w-12">Qty</th>
+                        <th className="py-1 text-[10px] font-bold text-black uppercase tracking-wider text-right w-24">Price</th>
+                        <th className="py-1 text-[10px] font-bold text-black uppercase tracking-wider text-right w-28">Amount</th>
                       </tr>
                     </thead>
                     <tbody>
                       {activeInvoice.items.map((item, idx) => {
                         const rowTotal = (item.sellingPrice || 0) * (item.quantity || 0);
                         return (
-                          <tr key={idx} className="border-b border-black last:border-b-0 text-black text-[12.5px] font-semibold">
-                            <td className="py-1.5 text-center text-black font-mono text-[12.5px]">{idx + 1}</td>
-                            <td className="py-1.5 pl-2">
-                              <span className="font-bold text-black block text-[12.5px]">{item.productName}</span>
-                              {item.sku && <span className="text-[10.5px] text-black block mt-0.5 uppercase tracking-wider font-mono font-bold">{item.sku}</span>}
+                          <tr key={idx} className="border-b border-black last:border-b-0 text-black text-[10px] font-semibold">
+                            <td className="py-1 text-center text-black font-mono text-[10px]">{idx + 1}</td>
+                            <td className="py-1 pl-2">
+                              <span className="font-bold text-black block text-[10.5px]">{item.productName}</span>
+                              {item.sku && <span className="text-[9px] text-black block mt-0 uppercase tracking-wider font-mono font-bold">{item.sku}</span>}
                             </td>
-                            <td className="py-1.5 text-center font-bold text-[12.5px]">{item.quantity > 0 ? item.quantity : ' '}</td>
-                            <td className="py-1.5 text-right font-mono text-black text-[12.5px]">{formatBDTCurrency(item.sellingPrice || 0)}</td>
-                            <td className="py-1.5 text-right font-mono font-bold text-black text-[12.5px]">{formatBDTCurrency(rowTotal)}</td>
+                            <td className="py-1 text-center font-bold text-[10px]">{item.quantity > 0 ? item.quantity : ' '}</td>
+                            <td className="py-1 text-right font-mono text-black text-[10px]">{formatBDTCurrency(item.sellingPrice || 0)}</td>
+                            <td className="py-1 text-right font-mono font-bold text-black text-[10px]">{formatBDTCurrency(rowTotal)}</td>
                           </tr>
                         );
                       })}
@@ -2107,8 +2091,8 @@ export const Sales: React.FC = () => {
                 </div>
 
                 {/* 4. Summary Block */}
-                <div className="flex justify-end pt-2 border-t-2 border-black">
-                  <div className="w-1/2 md:w-2/5 space-y-0.5 text-[13px] text-black font-bold">
+                <div className="flex justify-end pt-1 border-t border-black">
+                  <div className="w-[190px] space-y-0.5 text-[10px] text-black font-bold">
                     <div className="flex justify-between">
                       <span>Subtotal</span>
                       <span className="font-mono text-black">{(activeInvoice.subtotal !== undefined ? activeInvoice.subtotal : activeInvoice.totalAmount) > 0 ? formatBDTCurrency(activeInvoice.subtotal !== undefined ? activeInvoice.subtotal : activeInvoice.totalAmount) : ' '}</span>
@@ -2121,82 +2105,80 @@ export const Sales: React.FC = () => {
                       <span>Delivery Charge</span>
                       <span className="font-mono">{(activeInvoice.deliveryCharge || 0) > 0 ? `+ ${formatBDTCurrency(activeInvoice.deliveryCharge)}` : ' '}</span>
                     </div>
-                    <div className="flex justify-between border-t-2 border-black pt-1.5 pb-0.5">
-                      <span className="font-extrabold text-black text-[14.5px] uppercase">Grand Total</span>
-                      <span className="font-mono text-[18px] font-extrabold text-black">{(activeInvoice.totalAmount || 0) > 0 ? formatBDTCurrency(activeInvoice.totalAmount) : ' '}</span>
+                    <div className="flex justify-between border-t border-black pt-1 pb-0.5">
+                      <span className="font-extrabold text-black text-[11px] uppercase">Grand Total</span>
+                      <span className="font-mono text-[13px] font-extrabold text-black">{(activeInvoice.totalAmount || 0) > 0 ? formatBDTCurrency(activeInvoice.totalAmount) : ' '}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Amount Paid</span>
                       <span className="font-mono text-black">{(activeInvoice.amountPaid !== undefined ? activeInvoice.amountPaid : activeInvoice.totalAmount) > 0 ? formatBDTCurrency(activeInvoice.amountPaid !== undefined ? activeInvoice.amountPaid : activeInvoice.totalAmount) : ' '}</span>
                     </div>
-                    <div className="flex justify-between text-black font-extrabold border-t-2 border-black pt-1.5">
+                    <div className="flex justify-between text-black font-extrabold border-t border-black pt-1">
                       <span>Due Amount</span>
-                      <span className="font-mono text-[14px]">{(activeInvoice.totalAmount - (activeInvoice.amountPaid || 0)) > 0 ? formatBDTCurrency(activeInvoice.totalAmount - (activeInvoice.amountPaid || 0)) : ' '}</span>
+                      <span className="font-mono text-[11px]">{(activeInvoice.totalAmount - (activeInvoice.amountPaid || 0)) > 0 ? formatBDTCurrency(activeInvoice.totalAmount - (activeInvoice.amountPaid || 0)) : ' '}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* 5. Footer & Signature Area */}
-                <div className="border-t-2 border-black pt-2.5 grid grid-cols-2 gap-4 text-[12.5px] text-black font-bold font-sans">
+                <div className="border-t border-black pt-1.5 grid grid-cols-2 gap-3 text-[10px] text-black font-bold font-sans">
                   
                   {/* Left Column: Notes & Warranty */}
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <div>
-                      <h4 className="font-bold text-black uppercase tracking-wide text-[14px] mb-0.5">Notes</h4>
-                      <p className="text-black font-semibold whitespace-pre-wrap text-[12px] leading-snug">{activeInvoice.notes || "Thank you for your business."}</p>
+                      <h4 className="font-bold text-black uppercase tracking-wide text-[11px] mb-0.5">Notes</h4>
+                      <p className="text-black font-semibold whitespace-pre-wrap text-[9.5px] leading-tight">{activeInvoice.notes || "Thank you for your business."}</p>
                     </div>
                     <div>
-                      <h4 className="font-bold text-black uppercase tracking-wide text-[14px] mb-0.5">Warranty Terms & Conditions</h4>
-                      <div className="space-y-0.5 text-[9.5px] font-semibold leading-snug">
-                        <p>১. ওয়ারেন্টি শুধুমাত্র উৎপাদনজনিত (Manufacturing Defect) ত্রুটির ক্ষেত্রে প্রযোজ্য।</p>
-                        <p>২. ফিজিক্যাল ড্যামেজ, পানি প্রবেশ, আগুন, ভাঙা বা পোড়া অবস্থায় ওয়ারেন্টি প্রযোজ্য হবে না।</p>
-                        <p>৩. ওয়ারেন্টি দাবি করার সময় মূল ইনভয়েস/রসিদ প্রদর্শন করতে হবে।</p>
-                        <p>৪. অনুমোদনহীন মেরামত বা খোলা হলে ওয়ারেন্টি বাতিল বলে গণ্য হবে।</p>
-                        <p>৫. ওয়ারেন্টি সেবা কোম্পানির নীতিমালা ও শর্তাবলী অনুযায়ী প্রদান করা হবে.</p>
+                      <h4 className="font-bold text-black uppercase tracking-wide text-[11px] mb-0.5">Warranty Terms</h4>
+                      <div className="space-y-0 text-[8px] font-semibold leading-tight">
+                        <p>১. ওয়ারেন্টি শুধুমাত্র উৎপাদনজনিত ত্রুটির ক্ষেত্রে প্রযোজ্য।</p>
+                        <p>২. ফিজিক্যাল ড্যামেজ, পানি, পোড়া বা ভাঙা অবস্থায় ওয়ারেন্টি বাতিল।</p>
+                        <p>৩. ওয়ারেন্টি দাবি করতে মূল ইনভয়েস প্রদর্শন করতে হবে।</p>
                       </div>
                     </div>
                     {activeInvoiceWarrantyData ? (
-                      <div className="border border-black p-2 text-[11px] text-black space-y-0.5 rounded-none">
-                        <span className="font-bold text-black block uppercase tracking-wide text-[11px]">Warranty Information</span>
-                        <p>Status: <span className="font-extrabold text-black uppercase text-[11px]">{activeInvoiceWarrantyData.status}</span></p>
-                        <p>Period: <span className="font-extrabold text-[11px]">{activeInvoiceWarrantyData.periodMonths} Months</span></p>
-                        <p>Expiry: <span className="font-extrabold text-[11px]">{(() => {
+                      <div className="border border-black p-1 text-[8.5px] text-black space-y-0 rounded-none">
+                        <span className="font-bold text-black block uppercase tracking-wide text-[9px]">Warranty Information</span>
+                        <p>Status: <span className="font-extrabold text-black uppercase text-[8.5px]">{activeInvoiceWarrantyData.status}</span></p>
+                        <p>Period: <span className="font-extrabold text-[8.5px]">{activeInvoiceWarrantyData.periodMonths} Months</span></p>
+                        <p>Expiry: <span className="font-extrabold text-[8.5px]">{(() => {
                           const purchaseDate = new Date(activeInvoiceWarrantyData.purchaseDate);
                           purchaseDate.setMonth(purchaseDate.getMonth() + activeInvoiceWarrantyData.periodMonths);
                           return purchaseDate.toLocaleDateString();
                         })()}</span></p>
-                        <p className="italic font-bold text-black text-[10px]">Terms: {activeInvoiceWarrantyData.terms}</p>
+                        <p className="italic font-bold text-black text-[8px]">Terms: {activeInvoiceWarrantyData.terms}</p>
                       </div>
                     ) : (
-                      <div className="border border-black p-1.5 text-[10px] text-black bg-white font-semibold rounded-none">
+                      <div className="border border-black p-1 text-[8.5px] text-black bg-white font-semibold rounded-none">
                         Standard warranty policy applies. Check invoice serial.
                       </div>
                     )}
                   </div>
 
                   {/* Right Column: Signature Display */}
-                  <div className="text-right flex flex-col justify-end items-end h-full pb-3">
-                    <p className="font-bold text-black uppercase tracking-wide text-[11px] mb-1">Authorized Signature</p>
-                    <div className="h-10 flex items-end justify-end mb-1">
+                  <div className="text-right flex flex-col justify-end items-end h-full pb-1">
+                    <p className="font-bold text-black uppercase tracking-wide text-[10px] mb-0.5">Authorized Signature</p>
+                    <div className="h-8 flex items-end justify-end mb-0.5">
                       {activeInvoice.signatureDataUrl ? (
-                        <img src={activeInvoice.signatureDataUrl} className="h-9 w-auto object-contain align-bottom" />
+                        <img src={activeInvoice.signatureDataUrl} className="h-7 w-auto object-contain align-bottom" />
                       ) : (
-                        <div className="w-36 border-b-2 border-black"></div>
+                        <div className="w-28 border-b border-black"></div>
                       )}
                     </div>
-                    <p className="text-[11px] text-black font-bold">MD Sahadat Hossen</p>
+                    <p className="text-[10px] text-black font-bold">MD Sahadat Hossen</p>
                   </div>
 
                 </div>
 
                 {/* Branding Footer line */}
-                <div className="pt-3 border-t-2 border-black flex justify-between items-center text-[12px] font-medium text-black select-none">
-                  <div className="flex gap-2">
+                <div className="pt-1.5 border-t border-black flex justify-between items-center text-[9px] font-bold text-black select-none">
+                  <div className="flex gap-1.5">
                     <span className="font-bold uppercase text-black">{invoiceBrandSpec.name}</span>
                     <span>•</span>
                     <span>{invoiceBrandSpec.email}</span>
                   </div>
-                  <div className="font-medium tracking-wide text-black">
+                  <div className="font-bold tracking-wide text-black">
                     Thank you for your business!
                   </div>
                 </div>
