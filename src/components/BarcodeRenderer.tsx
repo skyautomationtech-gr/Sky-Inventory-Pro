@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import JsBarcode from 'jsbarcode';
 import { jsPDF } from 'jspdf';
 import { Download, Printer, FileDown } from 'lucide-react';
+import { useApp } from '../context/AppContext';
 
 interface BarcodeRendererProps {
   barcode: string;
@@ -17,6 +18,7 @@ export const BarcodeRenderer: React.FC<BarcodeRendererProps> = ({
   showActions = true,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { addActivityLog, currentUser } = useApp();
 
   useEffect(() => {
     if (canvasRef.current && barcode) {
@@ -50,6 +52,10 @@ export const BarcodeRenderer: React.FC<BarcodeRendererProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+
+    if (addActivityLog && currentUser) {
+      addActivityLog('barcode_download', currentUser.email, `Downloaded barcode PNG for SKU: ${sku} / Barcode: ${barcode}`);
+    }
   };
 
   const downloadPDF = () => {
@@ -80,6 +86,10 @@ export const BarcodeRenderer: React.FC<BarcodeRendererProps> = ({
       pdf.text(`SKU: ${sku}`, 40, 45, { align: 'center' });
 
       pdf.save(`Barcode_${sku}_${barcode}.pdf`);
+
+      if (addActivityLog && currentUser) {
+        addActivityLog('barcode_download', currentUser.email, `Downloaded barcode PDF for SKU: ${sku} / Barcode: ${barcode}`);
+      }
     } catch (err) {
       console.error('Failed to export barcode PDF:', err);
     }
@@ -160,6 +170,10 @@ export const BarcodeRenderer: React.FC<BarcodeRendererProps> = ({
         </html>
       `);
       doc.close();
+    }
+
+    if (addActivityLog && currentUser) {
+      addActivityLog('barcode_print', currentUser.email, `Printed barcode for SKU: ${sku} / Barcode: ${barcode}`);
     }
   };
 

@@ -102,7 +102,7 @@ service cloud.firestore {
       return u.id is string && u.id.size() <= 128 &&
              u.name is string && u.name.size() <= 256 &&
              u.email is string && u.email.size() <= 256 &&
-             u.role is string && (u.role == 'superAdmin' || u.role == 'admin' || u.role == 'staff') &&
+             u.role is string && (u.role == 'superAdmin' || u.role == 'admin' || u.role == 'staff' || u.role == 'warehouseStaff') &&
              u.status is string && (u.status == 'active' || u.status == 'blocked' || u.status == 'inactive');
     }
 

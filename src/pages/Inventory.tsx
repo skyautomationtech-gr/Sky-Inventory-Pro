@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 export const Inventory: React.FC = () => {
-  const { products, inventoryLogs, adjustStock, currentUser, loading } = useApp();
+  const { products, inventoryLogs, adjustStock, currentUser, loading, addActivityLog } = useApp();
 
   // Selected state for stock adjusting
   const [selectedProductId, setSelectedProductId] = useState('');
@@ -110,6 +110,44 @@ export const Inventory: React.FC = () => {
             )}
 
             <form onSubmit={handleAdjustmentSubmit} className="space-y-4">
+              {/* Barcode Fast Scan Input */}
+              <div className="space-y-1 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <label className="text-[10.5px] font-bold text-teal-700 flex items-center gap-1">
+                  <span>⚡ Fast Scan Barcode / SKU</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Scan barcode or enter SKU... (then press Enter)"
+                  className="w-full bg-white border border-slate-200 rounded-lg p-2 text-xs font-semibold focus:outline-none focus:border-teal-500 font-mono"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const val = (e.target as HTMLInputElement).value.trim();
+                      if (!val) return;
+                      const matched = products.find(p => 
+                        (p.barcode && p.barcode.toLowerCase() === val.toLowerCase()) || 
+                        (p.sku && p.sku.toLowerCase() === val.toLowerCase())
+                      );
+                      if (matched) {
+                        setSelectedProductId(matched.id);
+                        setSuccessMsg(`Product found: "${matched.name}" selected!`);
+                        if (addActivityLog && currentUser) {
+                          addActivityLog('barcode_scan', currentUser.email, `Successfully scanned barcode/SKU in Warehouse Controls: "${val}" for product "${matched.name}"`);
+                        }
+                        (e.target as HTMLInputElement).value = '';
+                        setTimeout(() => setSuccessMsg(''), 3000);
+                      } else {
+                        setErrorMsg(`No product found matching "${val}"`);
+                        if (addActivityLog && currentUser) {
+                          addActivityLog('barcode_scan_failed', currentUser.email, `Scanned barcode/SKU in Warehouse Controls not found: "${val}"`);
+                        }
+                        setTimeout(() => setErrorMsg(''), 4000);
+                      }
+                    }
+                  }}
+                />
+              </div>
+
               {/* Product Selector */}
               <div className="space-y-1">
                 <label className="text-[11px] font-semibold text-slate-500 font-sans">Select Component Part *</label>

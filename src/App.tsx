@@ -43,6 +43,7 @@ function AppContent() {
   }
 
   const isSuperAdmin = currentUser?.role === 'Super Admin';
+  const isWarehouseStaff = currentUser?.role === 'Warehouse Staff';
 
   return (
     <Layout>
@@ -50,10 +51,10 @@ function AppContent() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/products" element={<Products />} />
         <Route path="/inventory" element={<Inventory />} />
-        <Route path="/sales" element={<Sales />} />
-        <Route path="/customers" element={<Customers />} />
-        <Route path="/suppliers" element={<Suppliers />} />
-        <Route path="/reports" element={<Reports />} />
+        <Route path="/sales" element={!isWarehouseStaff ? <Sales /> : <Navigate to="/" replace />} />
+        <Route path="/customers" element={!isWarehouseStaff ? <Customers /> : <Navigate to="/" replace />} />
+        <Route path="/suppliers" element={!isWarehouseStaff ? <Suppliers /> : <Navigate to="/" replace />} />
+        <Route path="/reports" element={(currentUser?.role === 'Super Admin' || currentUser?.role === 'Admin') ? <Reports /> : <Navigate to="/" replace />} />
         <Route path="/users" element={isSuperAdmin ? <Users /> : <Navigate to="/" replace />} />
         <Route path="/settings" element={isSuperAdmin ? <Settings /> : <Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />

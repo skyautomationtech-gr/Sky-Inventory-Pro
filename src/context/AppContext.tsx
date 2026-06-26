@@ -47,7 +47,13 @@ interface AppContextProps {
   login: (email: string, password: string, rememberMe: boolean) => Promise<void>;
   registerUser: (name: string, email: string, password: string, businessName: string) => Promise<void>;
   logout: () => void;
-  resetPassword: (email: string, password: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  resendVerification: (email: string, password: string) => Promise<void>;
+  approveUser: (uid: string, email: string) => Promise<void>;
+  rejectUser: (uid: string, email: string) => Promise<void>;
+  deleteUser: (uid: string, email: string) => Promise<void>;
+  updateUserRole: (uid: string, email: string, role: UserRole) => Promise<void>;
+  disableUser: (uid: string, email: string) => Promise<void>;
   sendRegisterOTP: (name: string, email: string, password: string, businessName: string) => Promise<string>;
   sendResetOTP: (email: string) => Promise<string>;
   verifyOTP: (email: string, code: string, type: 'registration' | 'reset') => Promise<any>;
@@ -168,50 +174,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
             if (userDocSnap.exists()) {
               userData = userDocSnap.data();
-            } else {
-              // Search users collection by email fallback to support preexisting user documents
-              try {
-                const usersRef = collection(db, 'users');
-                const q = query(usersRef, where('email', '==', userEmail));
-                const querySnap = await getDocs(q);
-                if (!querySnap.empty) {
-                  userData = querySnap.docs[0].data();
-                  // Migrate user profile under their actual Firebase auth uid
-                  const migratedDoc = {
-                    ...userData,
-                    id: freshUser.uid,
-                    updatedAt: new Date().toISOString()
-                  };
-                  await setDoc(doc(db, 'users', freshUser.uid), migratedDoc);
-                }
-              } catch (err) {
-                console.error("Error searching user by email fallback:", err);
-              }
+            } else if (userEmail === 'skyautomationtech@gmail.com') {
+              // Automatically bootstrap Super Admin to prevent lockouts
+              userData = {
+                id: freshUser.uid,
+                uid: freshUser.uid,
+                fullName: 'Sky Automation Tech',
+                name: 'Sky Automation Tech',
+                email: userEmail,
+                role: 'superAdmin',
+                status: 'active',
+                createdAt: new Date().toISOString(),
+                createdBy: 'system-bootstrap',
+                lastLogin: new Date().toISOString(),
+                emailVerified: true
+              };
+              await setDoc(userDocRef, userData);
+              await setDoc(doc(db, 'registered_emails', userEmail), { exists: true, email: userEmail, uid: freshUser.uid });
             }
 
-            if (userEmail === 'skyautomationtech@gmail.com') {
-              if (!userData) {
-                userData = {
-                  name: 'Sky Automation Tech',
-                  email: userEmail,
-                  role: 'superAdmin',
-                  status: 'active'
-                };
-              } else {
-                userData.role = 'superAdmin';
-                userData.status = 'active';
-              }
-              try {
-                await setDoc(doc(db, 'users', freshUser.uid), {
-                  ...userData,
-                  id: freshUser.uid,
-                  role: 'superAdmin',
-                  status: 'active',
-                  updatedAt: new Date().toISOString()
-                }, { merge: true });
-              } catch (err) {
-                console.error("Error setting skyautomationtech role:", err);
-              }
+            if (userEmail === 'skyautomationtech@gmail.com' && userData) {
+              userData.role = 'superAdmin';
+              userData.status = 'active';
             }
 
             if (userData) {
@@ -219,12 +203,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               
               if (isActive) {
                 const roleStr = String(userData.role || '').toLowerCase().replace(/[^a-z]/g, '');
-                const mappedRole: UserRole = roleStr === 'superadmin' ? 'Super Admin' : roleStr === 'admin' ? 'Admin' : 'Staff';
+                const mappedRole: UserRole = 
+                  roleStr === 'superadmin' ? 'Super Admin' : 
+                  roleStr === 'admin' ? 'Admin' : 
+                  roleStr === 'warehousestaff' ? 'Warehouse Staff' : 'Staff';
                 matchedUser = {
-                  name: userData.name || freshUser.displayName || 'Enterprise Operator',
+                  id: userData.id || freshUser.uid,
+                  uid: userData.uid || userData.id || freshUser.uid,
+                  name: userData.fullName || userData.name || freshUser.displayName || 'Operator',
+                  fullName: userData.fullName || userData.name || freshUser.displayName || 'Operator',
                   email: userEmail,
                   role: mappedRole,
-                  avatar: userData.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(userData.name || 'Operator')}`
+                  avatar: userData.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(userData.fullName || userData.name || 'Operator')}`,
+                  status: userData.status,
+                  createdAt: userData.createdAt,
+                  lastLogin: userData.lastLogin,
+                  emailVerified: true
                 };
                 
                 setCurrentUser(matchedUser);
@@ -234,50 +228,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 localStorage.setItem('sky_v2_user', JSON.stringify(matchedUser));
                 localStorage.setItem('sky_v2_auth_role', matchedUser.role);
               }
-            } else {
-              // Create default profile if none exists yet (e.g. from a direct signin sync)
-              const namePart = freshUser.displayName || freshUser.email?.split('@')[0] || 'Representative';
-              // Check if empty to set superAdmin
-              const allUsersSnap = await getDocs(collection(db, 'users'));
-              const isFirstUser = allUsersSnap.empty;
-              const roleSlug = isFirstUser ? 'superAdmin' : 'staff';
-              const roleLabel: UserRole = isFirstUser ? 'Super Admin' : 'Staff';
-
-              const newUserDoc = {
-                id: freshUser.uid,
-                name: namePart,
-                email: userEmail,
-                role: roleSlug,
-                status: 'active',
-                createdAt: new Date().toISOString()
-              };
-
-              await setDoc(doc(db, 'users', freshUser.uid), newUserDoc);
-
-              matchedUser = {
-                name: namePart,
-                email: userEmail,
-                role: roleLabel,
-                avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(namePart)}`
-              };
-              
-              setCurrentUser(matchedUser);
-              setAuthenticatedRole(matchedUser.role);
-              setIsAuthenticated(true);
-              localStorage.setItem('sky_v2_session_active', 'true');
-              localStorage.setItem('sky_v2_user', JSON.stringify(matchedUser));
-              localStorage.setItem('sky_v2_auth_role', matchedUser.role);
-              isActive = true;
             }
 
             if (!isActive) {
               // Sign out immediately if they are logged in but inactive
+              await signOut(auth);
               setIsAuthenticated(false);
               setAuthenticatedRole(null);
               localStorage.setItem('sky_v2_session_active', 'false');
             }
           } catch (e) {
             console.error("Error setting up verified user session:", e);
+            await signOut(auth);
             setIsAuthenticated(false);
             setAuthenticatedRole(null);
             localStorage.setItem('sky_v2_session_active', 'false');
@@ -445,12 +407,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return;
         }
         const roleStr = String(d.role || '').toLowerCase().replace(/[^a-z]/g, '');
-        const mappedRole: UserRole = roleStr === 'superadmin' ? 'Super Admin' : roleStr === 'admin' ? 'Admin' : 'Staff';
+        const mappedRole: UserRole = 
+          roleStr === 'superadmin' ? 'Super Admin' : 
+          roleStr === 'admin' ? 'Admin' : 
+          roleStr === 'warehousestaff' ? 'Warehouse Staff' : 'Staff';
         items.push({
-          name: d.name,
+          id: d.id || doc.id,
+          uid: d.uid || d.id || doc.id,
+          fullName: d.fullName || d.name || 'Representative',
+          name: d.name || d.fullName || 'Representative',
           email: d.email,
           role: mappedRole,
-          avatar: d.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=100'
+          avatar: d.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(d.fullName || d.name || 'Operator')}`,
+          status: d.status || 'pending',
+          createdAt: d.createdAt,
+          createdBy: d.createdBy,
+          lastLogin: d.lastLogin,
+          emailVerified: d.emailVerified !== undefined ? d.emailVerified : false
         });
       });
       setUsers(items);
@@ -934,7 +907,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteProduct = (id: string): boolean => {
-    if (currentUser.role === 'Staff') {
+    if (currentUser.role === 'Staff' || currentUser.role === 'Warehouse Staff') {
       return false;
     }
     const executeDelete = async () => {
@@ -1391,16 +1364,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addUser = async (newUser: User) => {
     const id = `u-${Date.now()}`;
+    const normalizedEmail = newUser.email.toLowerCase().trim();
     try {
-      const mappedRole = newUser.role === 'Super Admin' ? 'superAdmin' : newUser.role === 'Admin' ? 'admin' : 'staff';
+      const mappedRole = 
+        newUser.role === 'Super Admin' ? 'superAdmin' : 
+        newUser.role === 'Admin' ? 'admin' : 
+        newUser.role === 'Warehouse Staff' ? 'warehouseStaff' : 'staff';
       await setDoc(doc(db, 'users', id), {
         id,
         name: newUser.name,
-        email: newUser.email,
+        email: normalizedEmail,
         role: mappedRole,
         status: 'active',
         avatar: newUser.avatar || '',
         createdAt: new Date().toISOString()
+      });
+      // Register email
+      await setDoc(doc(db, 'registered_emails', normalizedEmail), {
+        exists: true,
+        email: normalizedEmail,
+        uid: id
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `users/${id}`);
@@ -1493,113 +1476,117 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     try {
-      // 1. Enforce Explicit Session Persistence Configuration
+      // 1. Enforce Session Persistence
       await setPersistence(auth, rememberMe ? browserLocalPersistence : browserSessionPersistence);
 
-      // 2. Default to standard Firebase Auth Signin FIRST
+      // 2. Perform Firebase Auth Signin
       const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
       const authUser = userCredential.user;
-      
-      // 3. Email Verification Check Gate
+
+      // 3. Check Email Verification Status
       if (!authUser.emailVerified) {
         try {
           await sendEmailVerification(authUser);
         } catch (err) {
-          console.error("Error sending verification email on login:", err);
+          console.error("Error sending verification email during login check:", err);
         }
         await signOut(auth);
-        throw new Error('EMAIL_NOT_VERIFIED: Your business email must be verified before signing in. A fresh verification link has been sent to your email.');
+        throw new Error('EMAIL_NOT_VERIFIED: Your email is not verified yet. A verification email has been sent. Please check your inbox and verify your email before logging in.');
       }
-      
-      // Reset attempts on successful sign-in
+
+      // 4. Load the user profile from Firestore users/{uid}
+      const userDocRef = doc(db, 'users', authUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (!userDocSnap.exists()) {
+        if (normalizedEmail === 'skyautomationtech@gmail.com') {
+          const defaultAdmin = {
+            id: authUser.uid,
+            uid: authUser.uid,
+            fullName: 'Sky Automation Tech',
+            name: 'Sky Automation Tech',
+            email: normalizedEmail,
+            role: 'superAdmin',
+            status: 'active',
+            createdAt: new Date().toISOString(),
+            createdBy: 'system-bootstrap',
+            lastLogin: new Date().toISOString(),
+            emailVerified: true
+          };
+          await setDoc(userDocRef, defaultAdmin);
+          await setDoc(doc(db, 'registered_emails', normalizedEmail), { exists: true, email: normalizedEmail, uid: authUser.uid });
+        } else {
+          await signOut(auth);
+          throw new Error('No user profile was found associated with this account. Please register again.');
+        }
+      }
+
+      const userData = userDocSnap.exists() ? userDocSnap.data() : { role: 'superAdmin', status: 'active', fullName: 'Sky Automation Tech', name: 'Sky Automation Tech' };
+
+      // Ensure superadmin cannot be downgraded
+      if (normalizedEmail === 'skyautomationtech@gmail.com') {
+        userData.role = 'superAdmin';
+        userData.status = 'active';
+      }
+
+      // Block if status is pending or inactive or blocked
+      if (userData.status === 'pending') {
+        await signOut(auth);
+        throw new Error('Your account is pending admin approval. Once approved, you will be granted access to the ERP.');
+      }
+
+      if (userData.status === 'blocked' || userData.status === 'inactive') {
+        await signOut(auth);
+        throw new Error('Your account has been disabled or blocked. Please contact your Super Admin.');
+      }
+
+      // 5. Update user document with lastLogin and emailVerified
+      await updateDoc(userDocRef, {
+        lastLogin: new Date().toISOString(),
+        emailVerified: true
+      });
+
+      // 6. Reset password attempt counters
       localStorage.removeItem(attemptsKey);
       localStorage.removeItem(lockoutKey);
 
-      // Log success in Activity Logs
-      await addActivityLog("login_success", normalizedEmail, "Successful sign-in");
+      // 7. Write to Audit Logs
+      await addActivityLog("login", normalizedEmail, "Operator successfully signed in");
 
-      // Retrieve additional user data parameters from our Firestore database
-      const userDocRef = doc(db, 'users', authUser.uid);
-      let userDocSnap = await getDoc(userDocRef);
-      let userData: any = null;
+      // 8. Set State
+      const roleStr = String(userData.role || '').toLowerCase().replace(/[^a-z]/g, '');
+      const mappedRole: UserRole = 
+        roleStr === 'superadmin' ? 'Super Admin' : 
+        roleStr === 'admin' ? 'Admin' : 
+        roleStr === 'warehousestaff' ? 'Warehouse Staff' : 'Staff';
 
-      if (userDocSnap.exists()) {
-        userData = userDocSnap.data();
-      } else {
-        // Fallback: search users collection by email
-        try {
-          const usersRef = collection(db, 'users');
-          const q = query(usersRef, where('email', '==', normalizedEmail));
-          const querySnap = await getDocs(q);
-          if (!querySnap.empty) {
-            userData = querySnap.docs[0].data();
-            // Migrate user profile under their actual Firebase uid
-            const migratedDoc = {
-              ...userData,
-              id: authUser.uid,
-              updatedAt: new Date().toISOString()
-            };
-            await setDoc(doc(db, 'users', authUser.uid), migratedDoc);
-          }
-        } catch (err) {
-          console.error("Error searching user by email in login:", err);
-        }
-      }
-      
-      if (userData) {
-        if (userData.status === 'inactive') {
-          await signOut(auth);
-          throw new Error('Your enterprise account is inactive. Please complete your registration via OTP verification.');
-        }
-        
-        if (userData.status === 'blocked') {
-          await signOut(auth);
-          throw new Error('Your account has been blocked due to security policies. Please contact your Super Admin.');
-        }
-        
-        const roleStr = String(userData.role || '').toLowerCase().replace(/[^a-z]/g, '');
-        const mappedRole: UserRole = roleStr === 'superadmin' ? 'Super Admin' : roleStr === 'admin' ? 'Admin' : 'Staff';
-        const matchedUser = {
-          name: userData.name || authUser.displayName || 'Enterprise Operator',
-          email: normalizedEmail,
-          role: mappedRole,
-          avatar: userData.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(userData.name || 'Operator')}`
-        };
-        
-        setCurrentUser(matchedUser);
-        setAuthenticatedRole(matchedUser.role);
-        setIsAuthenticated(true);
-        
-        localStorage.setItem('sky_v2_session_active', 'true');
-        localStorage.setItem('sky_v2_user', JSON.stringify(matchedUser));
-        localStorage.setItem('sky_v2_auth_role', matchedUser.role);
-      } else {
-        // Build dummy mapping if none exists yet
-        const mappedRole: UserRole = 'Staff';
-        const matchedUser = {
-          name: authUser.email?.split('@')[0] || 'Enterprise Operator',
-          email: normalizedEmail,
-          role: mappedRole,
-          avatar: `https://api.dicebear.com/7.x/initials/svg?seed=Operator`
-        };
-        setCurrentUser(matchedUser);
-        setAuthenticatedRole(mappedRole);
-        setIsAuthenticated(true);
-        localStorage.setItem('sky_v2_session_active', 'true');
-        localStorage.setItem('sky_v2_user', JSON.stringify(matchedUser));
-        localStorage.setItem('sky_v2_auth_role', mappedRole);
-      }
+      const matchedUser = {
+        id: userData.id || authUser.uid,
+        uid: userData.uid || userData.id || authUser.uid,
+        name: userData.fullName || userData.name || 'Operator',
+        fullName: userData.fullName || userData.name || 'Operator',
+        email: normalizedEmail,
+        role: mappedRole,
+        avatar: userData.avatar || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(userData.fullName || userData.name || 'Operator')}`
+      };
+
+      setCurrentUser(matchedUser);
+      setAuthenticatedRole(matchedUser.role);
+      setIsAuthenticated(true);
+
+      localStorage.setItem('sky_v2_session_active', 'true');
+      localStorage.setItem('sky_v2_user', JSON.stringify(matchedUser));
+      localStorage.setItem('sky_v2_auth_role', matchedUser.role);
+
     } catch (error: any) {
-      if (error.message && (error.message.includes("EMAIL_NOT_VERIFIED") || error.message.includes("ACCOUNT_LOCKED"))) {
+      if (error.message && (error.message.includes("EMAIL_NOT_VERIFIED") || error.message.includes("pending admin approval") || error.message.includes("disabled or blocked") || error.message.includes("ACCOUNT_LOCKED"))) {
         throw error;
       }
-      
-      // Track failed attempts
+
+      // Increment password attempts
       if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
         const currentAttempts = Number(localStorage.getItem(attemptsKey) || 0) + 1;
         localStorage.setItem(attemptsKey, currentAttempts.toString());
-        
-        // Log failure in Activity Logs
         await addActivityLog("login_failure", normalizedEmail, `Failed sign-in attempt (${currentAttempts}/5)`);
 
         if (currentAttempts >= 5) {
@@ -1611,161 +1598,127 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           throw new Error(`Authentication failed. Incorrect email or password. (${5 - currentAttempts} attempt(s) remaining)`);
         }
       }
-      
       throw error;
     }
   };
 
   const registerUser = async (name: string, email: string, password: string, businessName: string) => {
-    // Standard register legacy link - rerouted directly to standard OTP flow
-    await sendRegisterOTP(name, email, password, businessName);
-  };
-
-  const sendRegisterOTP = async (name: string, email: string, password: string, businessName: string): Promise<string> => {
     const normalizedEmail = email.trim().toLowerCase();
-    
-    // 1. Create the user in Firebase Auth immediately. Let Firebase naturally handle duplicate detection and security policies.
+
+    // 1. Check if email exists in public 'registered_emails' collection first to avoid creating duplicate accounts
+    const regDocRef = doc(db, 'registered_emails', normalizedEmail);
+    const regDocSnap = await getDoc(regDocRef);
+    if (regDocSnap.exists()) {
+      throw new Error('An account with this email already exists. Please log in or reset your password.');
+    }
+
+    // 2. Create standard Firebase Authentication user
     let userCredential;
     try {
       userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
-      await sendEmailVerification(userCredential.user);
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {
-        throw new Error('An enterprise account with this email address already exists.');
+        throw new Error('An account with this email already exists. Please log in or reset your password.');
       }
       throw err;
     }
-    
-    const user = userCredential.user;
-    
-    // 2. Generate valid 6-digit random code
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    
-    // 3. Store in collection 'otps' - Since user is signed in, request.auth is active and can perform secure writes conforming to schema
-    await setDoc(doc(db, 'otps', normalizedEmail), {
-      otp: otpCode,
-      email: normalizedEmail,
-      attempts: 0,
-      createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 minutes validity
-      verified: false,
-      type: 'registration',
-      tempUserData: {
-        uid: user.uid,
-        name,
-        email: normalizedEmail,
-        businessName
-      }
-    });
 
-    // Output secure log details to browser console for verification logs
-    console.log(`[🔐 SKY SMTP Sandboxed GateWay] Registration authorization OTP dispatched to ${normalizedEmail}. Code: ${otpCode}`);
-    return otpCode;
-  };
+    const authUser = userCredential.user;
 
-  const sendResetOTP = async (email: string): Promise<string> => {
-    const normalizedEmail = email.trim().toLowerCase();
-    // Directly use Firebase Auth native password reset email flow
-    await sendPasswordResetEmail(auth, normalizedEmail);
-    return "";
-  };
+    // 3. Send Verification Email
+    await sendEmailVerification(authUser);
 
-  const verifyOTP = async (email: string, code: string, type: 'registration' | 'reset'): Promise<any> => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const otpDocRef = doc(db, 'otps', normalizedEmail);
-    const otpDocSnap = await getDoc(otpDocRef);
-    
-    if (!otpDocSnap.exists()) {
-      throw new Error('No authorization OTP session was found for this email address. Please click resend.');
-    }
-    
-    const otpData = otpDocSnap.data();
-    
-    // 1. Check expiration
-    if (new Date() > new Date(otpData.expiresAt)) {
-      throw new Error('Authorization code has expired. Active validity is limited to 5 minutes. Please click resend.');
-    }
-    
-    // 2. Check previous attempts limiting brute-force
-    if (otpData.attempts >= 5) {
-      throw new Error('Maximum verification attempts (5) exceeded. Brute-force protection rules activated. Please request a fresh OTP.');
-    }
-    
-    // 3. Check previously verified status
-    if (otpData.verified) {
-      throw new Error('This authorization code has already been utilized. Code reuse is prevented. Please request a fresh OTP.');
-    }
-    
-    // 4. Validate matching type
-    if (otpData.type !== type) {
-      throw new Error('Authorization context mismatch.');
-    }
-    
-    // 5. Compare actual codes
-    if (otpData.otp === code.trim()) {
-      await updateDoc(otpDocRef, { verified: true });
-      return otpData;
-    } else {
-      const nextAttempts = (otpData.attempts || 0) + 1;
-      await updateDoc(otpDocRef, { attempts: nextAttempts });
-      if (nextAttempts >= 5) {
-        throw new Error('Invalid verification code. Maximum attempts (5) exceeded. Brute-force protection rules activated. Please request a fresh OTP.');
-      } else {
-        throw new Error(`Invalid verification code. Enter the 6-digit code correctly. (Attempts remaining: ${5 - nextAttempts})`);
-      }
-    }
-  };
+    // 4. Create single user profile document in Firestore: users/{uid}
+    const isSky = normalizedEmail === 'skyautomationtech@gmail.com';
+    const roleSlug = isSky ? 'superAdmin' : 'staff';
+    const statusVal = isSky ? 'active' : 'pending';
 
-  const completeOTPRegistration = async (email: string, code: string): Promise<void> => {
-    const otpData = await verifyOTP(email, code, 'registration');
-    const { tempUserData } = otpData;
-    
-    if (!tempUserData) {
-      throw new Error('Pending signup records were corrupt. Please register again.');
-    }
-    
-    // 1. Scan users collection to determine correct role slug (since we are signed in, read is permitted)
-    const allUsersSnap = await getDocs(collection(db, 'users'));
-    const activeUsers = allUsersSnap.docs.filter(d => d.data().status === 'active' && d.id !== tempUserData.uid);
-    const isFirstUser = activeUsers.length === 0;
-    const roleSlug = isFirstUser ? 'superAdmin' : 'staff';
-    const roleLabel: UserRole = isFirstUser ? 'Super Admin' : 'Staff';
-    
-    // 2. Store formal permanent profile in collection 'users'
     const newUserProfile = {
-      id: tempUserData.uid,
-      name: tempUserData.name,
-      email: tempUserData.email,
+      id: authUser.uid,
+      uid: authUser.uid,
+      fullName: name,
+      name: name,
+      email: normalizedEmail,
       role: roleSlug,
-      businessName: tempUserData.businessName,
-      status: 'active',
-      createdAt: new Date().toISOString()
+      status: statusVal,
+      createdAt: new Date().toISOString(),
+      createdBy: 'self-registration',
+      lastLogin: null,
+      emailVerified: false
     };
-    
-    await setDoc(doc(db, 'users', tempUserData.uid), newUserProfile);
-    
-    // 3. Delete the successfully compiled register OTP document safely
-    await deleteDoc(doc(db, 'otps', email.trim().toLowerCase()));
-    
-    // 4. Save details and update context state
-    const matchedUser = {
-      name: tempUserData.name,
-      email: tempUserData.email,
-      role: roleLabel,
-      avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(tempUserData.name)}`
-    };
-    
-    setCurrentUser(matchedUser);
-    setAuthenticatedRole(roleLabel);
-    setIsAuthenticated(true);
-    localStorage.setItem('sky_v2_session_active', 'true');
-    localStorage.setItem('sky_v2_user', JSON.stringify(matchedUser));
-    localStorage.setItem('sky_v2_auth_role', roleLabel);
+
+    await setDoc(doc(db, 'users', authUser.uid), newUserProfile);
+
+    // 5. Create document in public 'registered_emails'
+    await setDoc(regDocRef, { exists: true, email: normalizedEmail, uid: authUser.uid });
+
+    // 6. Write to Audit Logs
+    await addActivityLog("registration", normalizedEmail, `New operator self-registration: ${name} (Pending approval)`);
+
+    // 7. Force instant signout to prevent standard user from logging in without email verification & approval
+    await signOut(auth);
   };
 
-  const completeOTPPasswordReset = async (email: string, code: string, passwordReset: string): Promise<void> => {
-    // Deprecated in favor of direct Firebase Auth sendPasswordResetEmail
+  const resendVerification = async (email: string, password: string) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
+    const user = userCredential.user;
+    if (user.emailVerified) {
+      await signOut(auth);
+      throw new Error('Your email is already verified.');
+    }
+    await sendEmailVerification(user);
+    await signOut(auth);
+    await addActivityLog("email_verification_resent", normalizedEmail, "Verification email resent successfully");
   };
+
+  const approveUser = async (uid: string, email: string) => {
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, { status: 'active' });
+    await addActivityLog("user_approval", currentUser.email, `Approved user account: ${email}`);
+  };
+
+  const rejectUser = async (uid: string, email: string) => {
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, { status: 'rejected' });
+    await addActivityLog("user_rejection", currentUser.email, `Rejected user account: ${email}`);
+  };
+
+  const deleteUser = async (uid: string, email: string) => {
+    const userRef = doc(db, 'users', uid);
+    await deleteDoc(userRef);
+    await deleteDoc(doc(db, 'registered_emails', email.toLowerCase()));
+    await addActivityLog("account_delete", currentUser.email, `Deleted user account: ${email}`);
+  };
+
+  const updateUserRole = async (uid: string, email: string, role: UserRole) => {
+    const isSky = email.toLowerCase() === 'skyautomationtech@gmail.com';
+    if (isSky) return; // Prevent role change for Super Admin
+
+    const userRef = doc(db, 'users', uid);
+    const roleSlug = 
+      role === 'Super Admin' ? 'superAdmin' :
+      role === 'Admin' ? 'admin' :
+      role === 'Warehouse Staff' ? 'warehouseStaff' : 'staff';
+
+    await updateDoc(userRef, { role: roleSlug });
+    await addActivityLog("role_change", currentUser.email, `Changed role of ${email} to ${role}`);
+  };
+
+  const disableUser = async (uid: string, email: string) => {
+    const isSky = email.toLowerCase() === 'skyautomationtech@gmail.com';
+    if (isSky) return; // Prevent disabling Super Admin
+
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, { status: 'blocked' });
+    await addActivityLog("account_disable", currentUser.email, `Disabled user account: ${email}`);
+  };
+
+  const sendRegisterOTP = async (name: string, email: string, password: string, businessName: string): Promise<string> => "";
+  const sendResetOTP = async (email: string): Promise<string> => "";
+  const verifyOTP = async (email: string, code: string, type: 'registration' | 'reset'): Promise<any> => null;
+  const completeOTPRegistration = async (email: string, code: string): Promise<void> => {};
+  const completeOTPPasswordReset = async (email: string, code: string, passwordReset: string): Promise<void> => {};
 
   const logout = async () => {
     try {
@@ -1787,9 +1740,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('sky_v2_auth_role');
   };
 
-  const resetPassword = async (email: string, password?: string) => {
+  const resetPassword = async (email: string) => {
     const normalizedEmail = email.trim().toLowerCase();
+    const regDocRef = doc(db, 'registered_emails', normalizedEmail);
+    const regDocSnap = await getDoc(regDocRef);
+    if (!regDocSnap.exists()) {
+      throw new Error('No account was found with this email.');
+    }
     await sendPasswordResetEmail(auth, normalizedEmail);
+    await addActivityLog("password_reset", normalizedEmail, "Password reset email requested");
   };
 
   return (
@@ -1827,6 +1786,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       registerUser,
       logout,
       resetPassword,
+      resendVerification,
+      approveUser,
+      rejectUser,
+      deleteUser,
+      updateUserRole,
+      disableUser,
       sendRegisterOTP,
       sendResetOTP,
       verifyOTP,

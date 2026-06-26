@@ -96,6 +96,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   ];
 
   const menuItems = baseMenuItems.filter(item => {
+    if (currentUser.role === 'Warehouse Staff') {
+      return item.name === 'Dashboard' || item.name === 'Products' || item.name === 'Inventory';
+    }
     if (currentUser.role === 'Staff' || currentUser.role === 'Admin') {
       return item.name !== 'Users' && item.name !== 'Settings';
     }
@@ -120,6 +123,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         return 'bg-teal-50 text-teal-700 border-teal-200';
       case 'Staff':
         return 'bg-amber-50 text-amber-700 border-amber-200';
+      case 'Warehouse Staff':
+        return 'bg-purple-50 text-purple-700 border-purple-200';
       default:
         return 'bg-slate-50 text-slate-600 border-slate-200';
     }
@@ -240,8 +245,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             {/* Role Badge Indicator */}
             <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100 shadow-sm">
               <span className="text-[9px] text-slate-400 font-mono hidden sm:inline uppercase tracking-wider font-bold">Role:</span>
-              <div className={`text-xs px-2.5 py-0.5 rounded-lg font-bold border ${getRoleBadgeColor(currentUser.role)}`}>
-                {currentUser.role}
+              <div className={`text-xs px-2.5 py-0.5 rounded-lg font-bold border flex items-center gap-1 ${getRoleBadgeColor(currentUser.role)}`}>
+                {currentUser.role === 'Warehouse Staff' && <span className="text-xs">📦</span>}
+                <span>{currentUser.role}</span>
               </div>
             </div>
 

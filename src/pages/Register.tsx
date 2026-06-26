@@ -6,7 +6,7 @@ import { User, Mail, Lock, ShieldAlert, ArrowRight, Server, Building, KeyRound, 
 import skyLogo from '../components/Sky.jpeg';
 
 export const Register: React.FC = () => {
-  const { sendRegisterOTP, completeOTPRegistration } = useApp();
+  const { registerUser, resendVerification } = useApp();
   const navigate = useNavigate();
 
   // Step state: 'form' or 'otp'
@@ -129,7 +129,7 @@ export const Register: React.FC = () => {
     return { valid: true, message: '' };
   };
 
-  // Step 1: Submit Form & Trigger OTP Dispatch
+  // Step 1: Submit Form & Trigger Firebase Registration
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -159,8 +159,8 @@ export const Register: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      await sendRegisterOTP(fullName, email, password, businessName);
-      setStep('otp');
+      await registerUser(fullName, email, password, businessName);
+      setStep('otp'); // Move to the verification status screen
       setCountdown(60);
       setCanResend(false);
     } catch (err: any) {
@@ -170,7 +170,7 @@ export const Register: React.FC = () => {
     }
   };
 
-  // Step 2: Resend Code Request
+  // Step 2: Resend Verification Email
   const handleResendOtp = async () => {
     if (!canResend) return;
     setOtpError(null);
@@ -178,9 +178,11 @@ export const Register: React.FC = () => {
     setCanResend(false);
     
     try {
-      await sendRegisterOTP(fullName, email, password, businessName);
+      await resendVerification(email, password);
+      setOtpSuccess(true);
+      setTimeout(() => setOtpSuccess(false), 5000);
     } catch (err: any) {
-      setOtpError(err.message || 'Failed to dispatch new OTP.');
+      setOtpError(err.message || 'Failed to dispatch new verification email.');
     }
   };
 
@@ -225,30 +227,7 @@ export const Register: React.FC = () => {
   };
 
   // Step 4: Verify Entry & Complete Registry
-  const handleOtpVerify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setOtpError(null);
 
-    const otpStr = otpArray.join('');
-    if (otpStr.length < 6) {
-      setOtpError('Please specify the full 6-digit authorization code.');
-      return;
-    }
-
-    setIsVerifying(true);
-    try {
-      await completeOTPRegistration(email, otpStr);
-      setOtpSuccess(true);
-      // Wait a tiny moment for visual confirmation click feel
-      setTimeout(() => {
-        navigate('/');
-      }, 1000);
-    } catch (err: any) {
-      setOtpError(err.message || 'Internal OTP verification issue.');
-    } finally {
-      setIsVerifying(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col justify-center items-center p-4 relative overflow-hidden font-sans">
@@ -441,7 +420,7 @@ export const Register: React.FC = () => {
                   >
                     {isSubmitting ? (
                       <>
-                        <svg className="animate-spin h-4 w-4 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <svg className="animate-spin h-4 w-4 text-black shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
@@ -458,7 +437,7 @@ export const Register: React.FC = () => {
               </motion.div>
             ) : (
               <motion.div
-                key="otp-verification-step"
+                key="verification-sent-step"
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -10 }}
@@ -467,18 +446,17 @@ export const Register: React.FC = () => {
               >
                 <div>
                   <div className="flex items-center gap-2 text-[#DFFF4F] mb-1 font-mono uppercase tracking-widest text-[9px] font-black border border-[#DFFF4F]/10 bg-[#DFFF4F]/5 px-2.5 py-1 rounded-full w-fit">
-                    <KeyRound className="w-3 h-3" />
-                    <span>Security Authorization Layer</span>
+                    <Mail className="w-3 h-3" />
+                    <span>Email Verification Sent</span>
                   </div>
-                  <h2 className="text-xl font-black font-display tracking-tight text-white mt-2">Enter verification OTP</h2>
+                  <h2 className="text-xl font-black font-display tracking-tight text-white mt-2">Verify Your Account</h2>
                   <p className="text-[11px] text-slate-400 mt-1.5 leading-relaxed font-semibold">
-                    We have dispatched a unique secure 6-digit confirmation key to:
+                    We have dispatched a unique secure confirmation link to:
                     <span className="block text-[#DFFF4F] font-bold mt-0.5 select-all">{email}</span>
                   </p>
                 </div>
 
-                <form onSubmit={handleOtpVerify} className="space-y-5">
-                  {/* OTP Error message */}
+                <div className="space-y-5">
                   {otpError && (
                     <motion.div 
                       initial={{ opacity: 0, scale: 0.95 }}
@@ -490,61 +468,36 @@ export const Register: React.FC = () => {
                     </motion.div>
                   )}
 
-                  {/* 6 Digit Numeric Code Boxes */}
-                  <div className="flex gap-2 justify-between items-center" id="otp-inputs-grid">
-                    {otpArray.map((digit, idx) => (
-                      <input
-                        key={idx}
-                        ref={otpRefs[idx]}
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        autoComplete="one-time-code"
-                        value={digit}
-                        onChange={(e) => handleOtpInput(idx, e.target.value)}
-                        onKeyDown={(e) => handleOtpKeyDown(idx, e)}
-                        onPaste={handleOtpPaste}
-                        className="w-12 h-14 bg-[#111624]/80 text-xl font-mono border border-white/10 rounded-xl text-center text-white focus:outline-none focus:border-[#DFFF4F] focus:ring-1 focus:ring-[#DFFF4F] font-extrabold focus:scale-105 transition-all"
-                      />
-                    ))}
-                  </div>
+                  {otpSuccess && (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1 }}
+                      className="p-3 bg-teal-950/40 border border-teal-500/20 text-teal-300 rounded-xl text-xs font-semibold leading-relaxed flex items-start gap-2"
+                    >
+                      <Check className="w-3.5 h-3.5 mt-0.5 text-teal-455 shrink-0" />
+                      <span>✓ Fresh email verification link dispatched successfully. Check your spam if not found.</span>
+                    </motion.div>
+                  )}
 
-                  {/* Security Notice Prompt */}
-                  <div className="p-3.5 bg-white/5 border border-white/5 rounded-2xl text-[10px] text-slate-400 leading-relaxed font-medium">
-                    <p className="text-slate-300 font-extrabold flex items-center gap-1.5 mb-1 text-[10.5px]">
-                      Notice:
+                  <div className="p-3.5 bg-white/5 border border-white/5 rounded-2xl text-[10px] text-slate-400 leading-relaxed font-medium space-y-1.5">
+                    <p className="text-slate-300 font-extrabold flex items-center gap-1.5 text-[10.5px]">
+                      Instructions:
                     </p>
-                    Check your <span className="text-white font-bold">Inbox, Spam, or Promotions folder</span> for the secure verification code email. Code remains active for 5 minutes.
+                    <p>1. Open your inbox and click the verification link in the email.</p>
+                    <p>2. Once verified, click the button below to log in securely.</p>
+                    <p className="text-slate-500 text-[9px] mt-2">Note: Access to the ERP is granted after your email is verified and approved by a Super Admin.</p>
                   </div>
 
-                  {/* Submit Verify Code */}
                   <button
-                    id="btn-verify-otp"
-                    type="submit"
-                    disabled={isVerifying || otpSuccess}
-                    className="w-full bg-[#DFFF4F] hover:bg-[#ebff85] disabled:bg-slate-800 disabled:text-slate-500 font-black text-black rounded-xl py-3 text-xs uppercase tracking-wider shadow-[0_4px_20px_rgba(223,255,79,0.25)] hover:shadow-[0_4px_25px_rgba(223,255,79,0.45)] transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
+                    id="btn-goto-login"
+                    type="button"
+                    onClick={() => navigate('/login')}
+                    className="w-full bg-[#DFFF4F] hover:bg-[#ebff85] font-black text-black rounded-xl py-3 text-xs uppercase tracking-wider shadow-[0_4px_20px_rgba(223,255,79,0.25)] hover:shadow-[0_4px_25px_rgba(223,255,79,0.45)] transition-all duration-200 cursor-pointer flex items-center justify-center gap-2"
                   >
-                    {isVerifying ? (
-                      <>
-                        <svg className="animate-spin h-4 w-4 text-black shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span>Verifying Authorization Code...</span>
-                      </>
-                    ) : otpSuccess ? (
-                      <>
-                        <Check className="w-4 h-4 text-black" />
-                        <span>Security Verified! Launching ERP...</span>
-                      </>
-                    ) : (
-                      <span className="flex items-center gap-1.5">
-                        Verify OTP Authorization <Send className="w-3 h-3" />
-                      </span>
-                    )}
+                    <span>Proceed to Sign In</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
                   </button>
 
-                  {/* Resend and back navigation elements */}
                   <div className="flex items-center justify-between pt-2">
                     <button
                       id="btn-trigger-resend"
@@ -553,24 +506,19 @@ export const Register: React.FC = () => {
                       onClick={handleResendOtp}
                       className="text-[11px] font-bold text-slate-400 hover:text-[#DFFF4F] disabled:text-slate-600 disabled:hover:text-slate-600 font-mono tracking-wide transition-all cursor-pointer flex items-center gap-1.5"
                     >
-                      <RefreshCw className={`w-3.5 h-3.5 ${!canResend ? '' : 'animate-pulse'}`} />
-                      {canResend ? 'Resend verification OTP' : `Resend code in (${countdown}s)`}
+                      <RefreshCw className={`w-3.5 h-3.5 ${!canResend ? '' : 'animate-spin'}`} />
+                      {canResend ? 'Resend verification email' : `Resend in (${countdown}s)`}
                     </button>
 
                     <button
                       type="button"
-                      onClick={() => {
-                        setStep('form');
-                        setOtpArray(['', '', '', '', '', '']);
-                        setOtpError(null);
-                      }}
+                      onClick={() => setStep('form')}
                       className="text-[11px] font-bold text-slate-500 hover:text-white transition-all cursor-pointer"
                     >
-                      Alter email address
+                      Change registration email
                     </button>
                   </div>
-
-                </form>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

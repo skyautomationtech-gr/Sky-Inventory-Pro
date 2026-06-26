@@ -102,7 +102,7 @@ const BRAND_SPECS = {
 const generateSerial = () => `SAT-SER-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 
 export const Sales: React.FC = () => {
-  const { products, sales, createSale, editSale, deleteSale, currentUser, loading } = useApp();
+  const { products, sales, createSale, editSale, deleteSale, currentUser, loading, addActivityLog } = useApp();
 
   // Reference for PDF generation
   const invoicePreviewRef = useRef<HTMLDivElement>(null);
@@ -299,6 +299,9 @@ export const Sales: React.FC = () => {
     );
 
     if (matchedProduct) {
+      if (addActivityLog && currentUser) {
+        addActivityLog('barcode_scan', currentUser.email, `Successfully scanned barcode/SKU: "${code}" for product "${matchedProduct.name}"`);
+      }
       // Check if product is already in billItems list
       const existingIdx = billItems.findIndex(item => item.productId === matchedProduct.id);
       
@@ -335,6 +338,9 @@ export const Sales: React.FC = () => {
       }
       setBarcodeQuery('');
     } else {
+      if (addActivityLog && currentUser) {
+        addActivityLog('barcode_scan_failed', currentUser.email, `Scanned barcode/SKU not found in directory: "${code}"`);
+      }
       setScannerFeedback({
         type: 'error',
         message: `No product found matching barcode or SKU: "${code}"`

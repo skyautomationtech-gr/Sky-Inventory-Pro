@@ -6,7 +6,7 @@ import { Mail, ShieldCheck, KeyRound, ArrowLeft, RefreshCw, Key, CheckCircle, Sh
 import skyLogo from '../components/Sky.jpeg';
 
 export const ForgotPassword: React.FC = () => {
-  const { sendResetOTP } = useApp();
+  const { resetPassword } = useApp();
   const navigate = useNavigate();
 
   // Wizard steps: 'request' | 'completed'
@@ -35,7 +35,7 @@ export const ForgotPassword: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      await sendResetOTP(email);
+      await resetPassword(email);
       setStep('completed');
     } catch (err: any) {
       setErrorMsg(err.message || 'Verification email delivery failure.');

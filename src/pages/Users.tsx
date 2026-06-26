@@ -11,11 +11,26 @@ import {
   LogIn,
   Search,
   Filter,
-  UserCheck
+  UserCheck,
+  X,
+  Trash2,
+  Shield,
+  UserX
 } from 'lucide-react';
 
 export const Users: React.FC = () => {
-  const { currentUser, setCurrentUserRole, users, addUser, loading } = useApp();
+  const { 
+    currentUser, 
+    setCurrentUserRole, 
+    users, 
+    addUser, 
+    loading,
+    approveUser,
+    rejectUser,
+    deleteUser,
+    updateUserRole,
+    disableUser
+  } = useApp();
 
   const isAuthorized = currentUser && (currentUser.role === 'Super Admin' || currentUser.role === 'Admin');
 
@@ -53,6 +68,23 @@ export const Users: React.FC = () => {
         return 'bg-teal-50 border-teal-200 text-teal-700';
       case 'Staff':
         return 'bg-amber-50 border-amber-205 text-amber-700';
+      case 'Warehouse Staff':
+        return 'bg-purple-50 border-purple-200 text-purple-700';
+      default:
+        return 'bg-slate-50 border-slate-200 text-slate-700';
+    }
+  };
+
+  const getStatusStyle = (status: string) => {
+    switch (status || 'active') {
+      case 'active':
+        return 'bg-emerald-50 border-emerald-200 text-emerald-700';
+      case 'pending':
+        return 'bg-amber-50 border-amber-200 text-amber-700';
+      case 'blocked':
+        return 'bg-rose-50 border-rose-200 text-rose-700';
+      case 'rejected':
+        return 'bg-slate-100 border-slate-200 text-slate-650 text-slate-600';
       default:
         return 'bg-slate-50 border-slate-200 text-slate-700';
     }
@@ -153,6 +185,7 @@ export const Users: React.FC = () => {
                 <option value="Super Admin">Super Admin</option>
                 <option value="Admin">Admin</option>
                 <option value="Staff">Staff</option>
+                <option value="Warehouse Staff">Warehouse Staff</option>
               </select>
             </div>
           </div>
@@ -161,7 +194,7 @@ export const Users: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {loading ? (
               <div className="col-span-full flex flex-col items-center justify-center bg-white border border-slate-100 rounded-2xl p-12 text-slate-400 font-semibold text-xs">
-                <div className="w-8 h-8 border-4 border-teal-550 border-teal-500 border-t-transparent rounded-full animate-spin mb-3"></div>
+                <div className="w-8 h-8 border-4 border-teal-555 border-teal-500 border-t-transparent rounded-full animate-spin mb-3"></div>
                 <span>Syncing with Firestore directory...</span>
               </div>
             ) : filteredUsers.length === 0 ? (
@@ -170,44 +203,140 @@ export const Users: React.FC = () => {
               </div>
             ) : (
               filteredUsers.map((user, idx) => {
-                const isActive = currentUser.email === user.email || (currentUser.role === user.role && users.every(u => u.email !== currentUser.email && u.role === user.role));
+                const isActive = currentUser && currentUser.email === user.email;
+                const isSuperAdmin = currentUser && currentUser.role === 'Super Admin';
+                const isSystemAdmin = currentUser && (currentUser.role === 'Super Admin' || currentUser.role === 'Admin');
+                const isSkyAdmin = user.email.toLowerCase() === 'skyautomationtech@gmail.com';
+                const userStatus = user.status || 'active';
+                const userId = user.uid || user.id || '';
+
                 return (
                   <div 
                     key={idx}
-                    className={`bg-white border hover:shadow-md transition-all duration-300 rounded-2xl p-4 flex flex-col justify-between ${
+                    className={`bg-white border hover:shadow-md transition-all duration-300 rounded-2xl p-4 flex flex-col justify-between gap-4 ${
                       isActive 
-                        ? 'border-teal-550 border-teal-500/60 shadow-md shadow-teal-500/5 ring-1 ring-teal-510 ring-teal-500/5 bg-gradient-to-br from-white to-teal-50/5' 
+                        ? 'border-teal-500 shadow-md shadow-teal-500/5 ring-1 ring-teal-500/5 bg-gradient-to-br from-white to-teal-50/5' 
                         : 'border-slate-100'
                     }`}
                   >
                     <div className="flex gap-3 items-start">
                       <img 
-                        src={user.avatar} 
+                        src={user.avatar || `https://i.pravatar.cc/100?img=${idx + 1}`}
                         alt={user.name} 
-                        className={`w-12 h-12 rounded-full border shadow-inner object-cover ${isActive ? 'border-teal-500' : 'border-slate-200'}`}
+                        className={`w-12 h-12 rounded-full border shadow-inner object-cover shrink-0 ${isActive ? 'border-teal-500' : 'border-slate-200'}`}
                         referrerPolicy="no-referrer"
                       />
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <h4 className="text-sm font-bold text-slate-800 flex items-center gap-1.5 flex-wrap">
-                          <span>{user.name}</span>
+                          <span className="truncate max-w-[120px]" title={user.name}>{user.name}</span>
                           {isActive && (
-                            <span className="inline-flex items-center gap-0.5 text-[8px] bg-teal-600/90 text-white font-mono uppercase px-1.5 py-0.5 rounded-full font-bold">
+                            <span className="inline-flex items-center gap-0.5 text-[8px] bg-teal-600/90 text-white font-mono uppercase px-1.5 py-0.5 rounded-full font-bold shrink-0">
                               <UserCheck className="w-2.5 h-2.5" />
-                              <span>Active</span>
+                              <span>You</span>
                             </span>
                           )}
                         </h4>
-                        <p className="text-[10px] text-slate-400 font-mono flex items-center gap-1 mt-0.5 truncate max-w-[170px]" title={user.email}>
+                        <p className="text-[10px] text-slate-400 font-mono flex items-center gap-1 mt-0.5 truncate" title={user.email}>
                           <Mail className="w-2.5 h-2.5 text-slate-400 shrink-0" />
                           <span>{user.email}</span>
                         </p>
-                        <div className="mt-2.5">
-                          <span className={`text-[10px] uppercase font-bold tracking-wide px-2 py-0.5 rounded border inline-block ${getRoleStyle(user.role)}`}>
+                        
+                        <div className="mt-2.5 flex items-center gap-1.5 flex-wrap">
+                          <span className={`text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border inline-block ${getRoleStyle(user.role)}`}>
                             {user.role}
+                          </span>
+                          <span className={`text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border inline-block ${getStatusStyle(userStatus)}`}>
+                            {userStatus}
                           </span>
                         </div>
                       </div>
                     </div>
+
+                    {/* Admin Interactive Panel */}
+                    {isSystemAdmin && !isSkyAdmin && (
+                      <div className="pt-3 border-t border-slate-50 flex flex-col gap-2">
+                        {/* Pending Approvals screen actions */}
+                        {userStatus === 'pending' && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              id={`btn-approve-${idx}`}
+                              onClick={() => approveUser && approveUser(userId, user.email)}
+                              className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10.5px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Approve</span>
+                            </button>
+                            <button
+                              id={`btn-reject-${idx}`}
+                              onClick={() => rejectUser && rejectUser(userId, user.email)}
+                              className="flex-1 py-1.5 bg-slate-100 hover:bg-rose-50 text-slate-600 hover:text-rose-600 rounded-lg text-[10.5px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors border border-slate-200"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              <span>Reject</span>
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Active user state updates */}
+                        {userStatus === 'active' && (
+                          <div className="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+                            <div className="flex-1 min-w-[100px]">
+                              <select
+                                id={`select-role-${idx}`}
+                                value={user.role}
+                                onChange={(e) => updateUserRole && updateUserRole(userId, user.email, e.target.value as UserRole)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-semibold focus:outline-none focus:border-teal-500 text-slate-800"
+                              >
+                                <option value="Staff">Staff</option>
+                                <option value="Warehouse Staff">Warehouse Staff</option>
+                                <option value="Admin">Admin</option>
+                                {isSuperAdmin && <option value="Super Admin">Super Admin</option>}
+                              </select>
+                            </div>
+                            <div className="flex gap-1.5 shrink-0">
+                              <button
+                                id={`btn-disable-${idx}`}
+                                title="Block Clearance"
+                                onClick={() => disableUser && disableUser(userId, user.email)}
+                                className="p-1.5 bg-slate-100 hover:bg-amber-50 hover:text-amber-700 text-slate-550 border border-slate-200 rounded-lg cursor-pointer transition-colors"
+                              >
+                                <UserX className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                id={`btn-delete-${idx}`}
+                                title="Delete Operator"
+                                onClick={() => deleteUser && deleteUser(userId, user.email)}
+                                className="p-1.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-750 text-rose-600 border border-slate-200 rounded-lg cursor-pointer transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Blocked or Rejected users restoration */}
+                        {(userStatus === 'blocked' || userStatus === 'rejected') && (
+                          <div className="flex items-center justify-between gap-2">
+                            <button
+                              id={`btn-reactivate-${idx}`}
+                              onClick={() => approveUser && approveUser(userId, user.email)}
+                              className="flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10.5px] font-bold flex items-center justify-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                              <span>Reactivate & Approve</span>
+                            </button>
+                            <button
+                              id={`btn-delete-blocked-${idx}`}
+                              title="Delete Operator"
+                              onClick={() => deleteUser && deleteUser(userId, user.email)}
+                              className="p-1.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-750 text-rose-600 border border-slate-200 rounded-lg cursor-pointer transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -258,6 +387,7 @@ export const Users: React.FC = () => {
                 className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs font-semibold focus:outline-none focus:border-teal-500 text-slate-800"
               >
                 <option value="Staff">Staff (Warehouse level entries)</option>
+                <option value="Warehouse Staff">Warehouse Staff (📦 Stock adjustments only)</option>
                 <option value="Admin">Admin (Management desk clears)</option>
                 <option value="Super Admin">Super Admin (Universal permissions)</option>
               </select>

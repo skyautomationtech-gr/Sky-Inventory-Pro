@@ -6,7 +6,7 @@ import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
 import skyLogo from '../components/Sky.jpeg';
 
 export const Login: React.FC = () => {
-  const { login } = useApp();
+  const { login, resendVerification } = useApp();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
@@ -17,6 +17,8 @@ export const Login: React.FC = () => {
   // Status states
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showResend, setShowResend] = useState(false);
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
 
   const validateEmail = (val: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val);
@@ -25,6 +27,8 @@ export const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setShowResend(false);
+    setResendStatus('idle');
 
     let finalEmail = email.trim();
     let finalPassword = password;
@@ -45,14 +49,33 @@ export const Login: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      // Simulate soft delay for premium security feel
-      await new Promise((resolve) => setTimeout(resolve, 800));
       await login(finalEmail, finalPassword, rememberMe);
       navigate('/');
     } catch (err: any) {
-      setErrorMsg(err.message || 'Authentication failed. Please verify credentials.');
+      const msg = err.message || '';
+      if (msg.includes('EMAIL_NOT_VERIFIED')) {
+        setShowResend(true);
+        setErrorMsg('Your email is not verified yet. A verification email has been sent. Please verify it before logging in.');
+      } else {
+        setErrorMsg(msg || 'Authentication failed. Please verify credentials.');
+      }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!email || !password) {
+      setErrorMsg('Please type your email and password to request a verification link.');
+      return;
+    }
+    setResendStatus('sending');
+    try {
+      await resendVerification(email.trim(), password);
+      setResendStatus('success');
+    } catch (err: any) {
+      setResendStatus('error');
+      setErrorMsg(err.message || 'Failed to resend verification email.');
     }
   };
 
@@ -106,9 +129,23 @@ export const Login: React.FC = () => {
               <motion.div 
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="p-3.5 bg-rose-950/40 border border-rose-500/20 text-rose-300 rounded-xl text-xs font-semibold leading-relaxed"
+                className="p-3.5 bg-rose-950/40 border border-rose-500/20 text-rose-300 rounded-xl text-xs font-semibold leading-relaxed flex flex-col gap-2.5"
               >
-                {errorMsg}
+                <span>{errorMsg}</span>
+                {showResend && (
+                  <button
+                    id="btn-resend-verification"
+                    type="button"
+                    onClick={handleResend}
+                    disabled={resendStatus === 'sending'}
+                    className="self-start text-[10.5px] font-bold text-[#DFFF4F] hover:underline cursor-pointer transition-all disabled:text-slate-500 disabled:no-underline"
+                  >
+                    {resendStatus === 'sending' ? 'Sending verification link...' :
+                     resendStatus === 'success' ? '✓ Fresh verification link dispatched!' :
+                     resendStatus === 'error' ? '✕ Failed to send. Try again.' :
+                     '✉ Resend Verification Email'}
+                  </button>
+                )}
               </motion.div>
             )}
 

@@ -1,10 +1,18 @@
-export type UserRole = 'Super Admin' | 'Admin' | 'Staff';
+export type UserRole = 'Super Admin' | 'Admin' | 'Staff' | 'Warehouse Staff';
 
 export interface User {
+  id?: string;
+  uid?: string;
+  fullName?: string;
   name: string;
   email: string;
   role: UserRole;
   avatar?: string;
+  status?: 'pending' | 'active' | 'blocked' | 'inactive';
+  createdAt?: string;
+  createdBy?: string;
+  lastLogin?: string | null;
+  emailVerified?: boolean;
 }
 
 export interface Product {
