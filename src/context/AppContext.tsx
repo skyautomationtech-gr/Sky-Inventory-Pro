@@ -45,7 +45,7 @@ interface AppContextProps {
   isDevMode: boolean;
   setIsDevMode: (val: boolean) => void;
   login: (email: string, password: string, rememberMe: boolean) => Promise<void>;
-  registerUser: (name: string, email: string, password: string, businessName: string) => Promise<void>;
+  registerUser: (fullName: string, email: string, password: string, dateOfBirth: string, phone: string, role: 'staff' | 'warehouseStaff', cvUrl: string) => Promise<void>;
   logout: () => void;
   resetPassword: (email: string) => Promise<void>;
   resendVerification: (email: string, password: string) => Promise<void>;
@@ -54,7 +54,7 @@ interface AppContextProps {
   deleteUser: (uid: string, email: string) => Promise<void>;
   updateUserRole: (uid: string, email: string, role: UserRole) => Promise<void>;
   disableUser: (uid: string, email: string) => Promise<void>;
-  sendRegisterOTP: (name: string, email: string, password: string, businessName: string) => Promise<string>;
+  sendRegisterOTP: (email: string) => Promise<string>;
   sendResetOTP: (email: string) => Promise<string>;
   verifyOTP: (email: string, code: string, type: 'registration' | 'reset') => Promise<any>;
   completeOTPRegistration: (email: string, code: string) => Promise<void>;
@@ -1483,8 +1483,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
       const authUser = userCredential.user;
 
-      // 3. Check Email Verification Status
-      if (!authUser.emailVerified) {
+      // 4. Load the user profile from Firestore users/{uid}
+      const userDocRef = doc(db, 'users', authUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      const dbUserData = userDocSnap.exists() ? userDocSnap.data() : null;
+
+      // 3. Check Email Verification Status (bypass if verified in Firestore profile)
+      const hasDbVerified = dbUserData && dbUserData.emailVerified === true;
+      if (!authUser.emailVerified && !hasDbVerified) {
         try {
           await sendEmailVerification(authUser);
         } catch (err) {
@@ -1493,10 +1499,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         await signOut(auth);
         throw new Error('EMAIL_NOT_VERIFIED: Your email is not verified yet. A verification email has been sent. Please check your inbox and verify your email before logging in.');
       }
-
-      // 4. Load the user profile from Firestore users/{uid}
-      const userDocRef = doc(db, 'users', authUser.uid);
-      const userDocSnap = await getDoc(userDocRef);
 
       if (!userDocSnap.exists()) {
         if (normalizedEmail === 'skyautomationtech@gmail.com') {
@@ -1602,14 +1604,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const registerUser = async (name: string, email: string, password: string, businessName: string) => {
+  const registerUser = async (
+    fullName: string,
+    email: string,
+    password: string,
+    dateOfBirth: string,
+    phone: string,
+    role: 'staff' | 'warehouseStaff',
+    cvUrl: string
+  ) => {
     const normalizedEmail = email.trim().toLowerCase();
 
     // 1. Check if email exists in public 'registered_emails' collection first to avoid creating duplicate accounts
     const regDocRef = doc(db, 'registered_emails', normalizedEmail);
     const regDocSnap = await getDoc(regDocRef);
     if (regDocSnap.exists()) {
-      throw new Error('An account with this email already exists. Please log in or reset your password.');
+      throw new Error('An account already exists with this email. Please sign in.');
     }
 
     // 2. Create standard Firebase Authentication user
@@ -1618,44 +1628,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {
-        throw new Error('An account with this email already exists. Please log in or reset your password.');
+        throw new Error('An account already exists with this email. Please sign in.');
       }
       throw err;
     }
 
     const authUser = userCredential.user;
 
-    // 3. Send Verification Email
-    await sendEmailVerification(authUser);
-
-    // 4. Create single user profile document in Firestore: users/{uid}
+    // 3. Create single user profile document in Firestore: users/{uid}
     const isSky = normalizedEmail === 'skyautomationtech@gmail.com';
-    const roleSlug = isSky ? 'superAdmin' : 'staff';
+    const roleSlug = isSky ? 'superAdmin' : role;
     const statusVal = isSky ? 'active' : 'pending';
 
     const newUserProfile = {
       id: authUser.uid,
       uid: authUser.uid,
-      fullName: name,
-      name: name,
+      fullName: fullName,
+      name: fullName,
+      dateOfBirth: dateOfBirth,
+      phone: phone,
       email: normalizedEmail,
       role: roleSlug,
       status: statusVal,
       createdAt: new Date().toISOString(),
       createdBy: 'self-registration',
       lastLogin: null,
-      emailVerified: false
+      emailVerified: true,
+      cvUrl: cvUrl
     };
 
     await setDoc(doc(db, 'users', authUser.uid), newUserProfile);
 
-    // 5. Create document in public 'registered_emails'
+    // 4. Create document in public 'registered_emails'
     await setDoc(regDocRef, { exists: true, email: normalizedEmail, uid: authUser.uid });
 
-    // 6. Write to Audit Logs
-    await addActivityLog("registration", normalizedEmail, `New operator self-registration: ${name} (Pending approval)`);
+    // 5. Write to Audit Logs
+    await addActivityLog("registration", normalizedEmail, `New operator self-registration: ${fullName} (Pending approval)`);
 
-    // 7. Force instant signout to prevent standard user from logging in without email verification & approval
+    // 6. Force instant signout to prevent standard user from logging in without approval
     await signOut(auth);
   };
 
@@ -1714,9 +1724,97 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await addActivityLog("account_disable", currentUser.email, `Disabled user account: ${email}`);
   };
 
-  const sendRegisterOTP = async (name: string, email: string, password: string, businessName: string): Promise<string> => "";
-  const sendResetOTP = async (email: string): Promise<string> => "";
-  const verifyOTP = async (email: string, code: string, type: 'registration' | 'reset'): Promise<any> => null;
+  const sendRegisterOTP = async (email: string): Promise<string> => {
+    const normalizedEmail = email.trim().toLowerCase();
+    
+    // Check if email already exists
+    const regDocRef = doc(db, 'registered_emails', normalizedEmail);
+    const regDocSnap = await getDoc(regDocRef);
+    if (regDocSnap.exists()) {
+      throw new Error('An account already exists with this email. Please sign in.');
+    }
+
+    // Generate a secure 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+
+    // Store in Firestore otps collection
+    await setDoc(doc(db, 'otps', normalizedEmail), {
+      otp: otp,
+      email: normalizedEmail,
+      attempts: 0,
+      verified: false,
+      type: 'registration',
+      expiresAt: expiresAt
+    });
+
+    console.log(`%c[OTP DISPATCH SYSTEM] Secure OTP generated for ${normalizedEmail}: ${otp}`, "color: #DFFF4F; font-weight: bold; font-size: 14px;");
+    return otp;
+  };
+
+  const sendResetOTP = async (email: string): Promise<string> => {
+    const normalizedEmail = email.trim().toLowerCase();
+    
+    // Check if email already exists
+    const regDocRef = doc(db, 'registered_emails', normalizedEmail);
+    const regDocSnap = await getDoc(regDocRef);
+    if (!regDocSnap.exists()) {
+      throw new Error('No account was found with this email.');
+    }
+
+    // Generate a secure 6-digit OTP
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
+
+    // Store in Firestore otps collection
+    await setDoc(doc(db, 'otps', normalizedEmail), {
+      otp: otp,
+      email: normalizedEmail,
+      attempts: 0,
+      verified: false,
+      type: 'reset',
+      expiresAt: expiresAt
+    });
+
+    console.log(`%c[OTP DISPATCH SYSTEM] Reset OTP generated for ${normalizedEmail}: ${otp}`, "color: #DFFF4F; font-weight: bold; font-size: 14px;");
+    return otp;
+  };
+
+  const verifyOTP = async (email: string, code: string, type: 'registration' | 'reset'): Promise<boolean> => {
+    const normalizedEmail = email.trim().toLowerCase();
+    const otpDocRef = doc(db, 'otps', normalizedEmail);
+    const otpDocSnap = await getDoc(otpDocRef);
+
+    if (!otpDocSnap.exists()) {
+      throw new Error('No OTP request found. Please request a new code.');
+    }
+
+    const data = otpDocSnap.data();
+    if (data.type !== type) {
+      throw new Error('Invalid OTP session type.');
+    }
+
+    if (Date.now() > (data.expiresAt || 0)) {
+      await deleteDoc(otpDocRef);
+      throw new Error('This OTP code has expired. Please request a new code.');
+    }
+
+    if ((data.attempts || 0) >= 5) {
+      await deleteDoc(otpDocRef);
+      throw new Error('Too many incorrect attempts. Please request a new code.');
+    }
+
+    if (data.otp !== code) {
+      const newAttempts = (data.attempts || 0) + 1;
+      await updateDoc(otpDocRef, { attempts: newAttempts });
+      throw new Error(`Incorrect code. You have ${5 - newAttempts} attempt(s) remaining.`);
+    }
+
+    // Success! Mark as verified
+    await updateDoc(otpDocRef, { verified: true });
+    return true;
+  };
+
   const completeOTPRegistration = async (email: string, code: string): Promise<void> => {};
   const completeOTPPasswordReset = async (email: string, code: string, passwordReset: string): Promise<void> => {};
 
